@@ -13,6 +13,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthModule } from './modules/health/health.module';
 import { UserModule } from './modules/user/user.module';
 import { MigrationModule } from './modules/migration/migration.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { GithubModule } from './common/helpers/github/github.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -34,6 +36,8 @@ const envPath = getEnvPath();
     HealthModule,
     UserModule,
     MigrationModule,
+    AuthModule,
+    GithubModule,
   ],
   controllers: [AppController],
   providers: [

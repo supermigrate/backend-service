@@ -11,6 +11,8 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggerMiddleware } from './common/middlewares/logger.middleware';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthModule } from './modules/health/health.module';
+import { UserModule } from './modules/user/user.module';
+import { MigrationModule } from './modules/migration/migration.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -30,6 +32,8 @@ const envPath = getEnvPath();
       ],
     }),
     HealthModule,
+    UserModule,
+    MigrationModule,
   ],
   controllers: [AppController],
   providers: [

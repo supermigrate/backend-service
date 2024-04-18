@@ -12,7 +12,7 @@ export class ServiceError extends Error {
     throw new HttpException(
       {
         message: this.message,
-        statusCode: this.code,
+        status: false,
       },
       this.code,
     );

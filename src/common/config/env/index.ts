@@ -37,4 +37,10 @@ export const env = {
     maxSize: envVar.get('MAX_FILE_SIZE').required().asIntPositive(),
     allowedMimes: envVar.get('ALLOWED_MIME_TYPES').required().asArray(),
   },
+  github: {
+    url: envVar.get('GITHUB_URL').required().asString(),
+    clientId: envVar.get('GITHUB_CLIENT_ID').required().asString(),
+    clientSecret: envVar.get('GITHUB_CLIENT_SECRET').required().asString(),
+    appId: envVar.get('GITHUB_APP_ID').required().asString(),
+  },
 };

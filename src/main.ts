@@ -46,7 +46,6 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  // App error
   app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
     console.log('App error', { err, req, res });
 

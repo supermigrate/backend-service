@@ -42,5 +42,6 @@ export const env = {
     clientId: envVar.get('GITHUB_CLIENT_ID').required().asString(),
     clientSecret: envVar.get('GITHUB_CLIENT_SECRET').required().asString(),
     appId: envVar.get('GITHUB_APP_ID').required().asString(),
+    appPrivateKey: envVar.get('GITHUB_APP_PRIVATE_KEY').required().asString(),
   },
 };

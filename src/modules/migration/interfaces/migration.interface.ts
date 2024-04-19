@@ -3,13 +3,23 @@ export interface Chain {
   name: string;
   token_address: string;
   token_detail_override?: {
-    name: string;
-    symbol: string;
-    decimals: number;
+    name?: string;
+    symbol?: string;
+    decimals?: number;
   };
   transaction_hash?: string;
 }
 
 export interface PullRequest {
   url: string;
+}
+
+export interface Migrate {
+  name: string;
+  symbol: string;
+  decimals: number;
+  description: string;
+  website: string;
+  twitter: string;
+  chains: Chain[];
 }

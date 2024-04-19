@@ -1,9 +1,11 @@
+import { Exclude } from 'class-transformer';
 import {
   Column,
   CreateDateColumn,
   Entity,
   ObjectId,
   ObjectIdColumn,
+  PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 
@@ -11,8 +13,12 @@ import {
   name: 'users',
 })
 export class User {
-  @ObjectIdColumn()
-  id: ObjectId;
+  @ObjectIdColumn({ select: false })
+  @Exclude()
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
 
   @Column()
   name: string;
@@ -24,9 +30,11 @@ export class User {
   avatar_url: string;
 
   @Column()
-  ips: {
-    address: string;
-  }[];
+  ip_address: string;
+
+  @Column({ select: false })
+  @Exclude()
+  metadata: Record<string, any>;
 
   @CreateDateColumn()
   created_at: Date;

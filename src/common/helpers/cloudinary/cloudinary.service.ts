@@ -22,7 +22,7 @@ export class CloudinaryService {
             }
 
             if (result && result.url) {
-              resolve(result.public_id);
+              resolve(result.secure_url);
             } else {
               reject('Upload failed');
             }
@@ -36,7 +36,6 @@ export class CloudinaryService {
     const url = await this.upload(file);
 
     if (url.endsWith('.svg')) {
-      console.log('CloudinaryService -> convertToSvg -> url', url);
       return url;
     }
 

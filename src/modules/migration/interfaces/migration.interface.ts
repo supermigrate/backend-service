@@ -1,3 +1,5 @@
+import { PrStatus } from '../enums/migration.enum';
+
 export interface Chain {
   id: number;
   name: string;
@@ -12,8 +14,9 @@ export interface Chain {
 
 export interface PullRequest {
   id: number;
+  installation_id: number;
   url: string;
-  status: 'pending' | 'merged';
+  status: PrStatus;
 }
 
 export interface Migrate {

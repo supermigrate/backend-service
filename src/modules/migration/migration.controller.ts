@@ -1,7 +1,10 @@
 import {
   Body,
+  ClassSerializerInterceptor,
   Controller,
+  Get,
   MaxFileSizeValidator,
+  Param,
   ParseFilePipe,
   Post,
   Req,
@@ -21,6 +24,7 @@ import { MigrateDto } from './dtos/migration.dto';
 @ApiTags('Migration')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
+@UseInterceptors(ClassSerializerInterceptor)
 @Controller('migrations')
 export class MigrationController {
   constructor(private readonly migrationService: MigrationService) {}
@@ -45,5 +49,15 @@ export class MigrationController {
     @Body() body: MigrateDto,
   ) {
     return this.migrationService.migrate(req.user, file, body);
+  }
+
+  @Get()
+  async getAll(@Req() req: AuthRequest) {
+    return this.migrationService.getAll(req.user);
+  }
+
+  @Get('/:id')
+  async getOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.migrationService.getOne(req.user, id);
   }
 }

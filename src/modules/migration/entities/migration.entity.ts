@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Chain, PullRequest } from '../interfaces/migration.interface';
 import { Exclude } from 'class-transformer';
+import { Status } from '../enums/migration.enum';
 
 @Entity({
   name: 'migrations',
@@ -49,7 +50,7 @@ export class Migration {
   pull_requests: PullRequest[];
 
   @Column()
-  status: 'pending' | 'completed' | 'failed' | 'processing';
+  status: Status;
 
   @Exclude()
   @Column({ select: false })

@@ -8,8 +8,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Migration } from './entities/migration.entity';
 import { MigrateDto } from './dtos/migration.dto';
-import { GithubService } from 'src/common/helpers/github/github.service';
-import { Chain, Migrate } from './interfaces/migration.interface';
+import { GithubService } from '../../common/helpers/github/github.service';
+import { Chain, Migrate, PullRequest } from './interfaces/migration.interface';
+import { successResponse } from '../../common/responses/success.helper';
+import { Status } from './enums/migration.enum';
 
 @Injectable()
 export class MigrationService {
@@ -52,7 +54,7 @@ export class MigrationService {
         twitter: body.twitter,
         logo_url: logoUrl,
         user_id: user.id,
-        status: 'pending',
+        status: Status.PENDING,
         metadata: {},
       });
 
@@ -67,7 +69,7 @@ export class MigrationService {
       if (!response.status) {
         await this.migrationRepository.update(
           { id: migration.id },
-          { status: 'failed' },
+          { status: Status.FAILED },
         );
 
         throw new ServiceError('Migration failed', HttpStatus.BAD_REQUEST);
@@ -75,13 +77,20 @@ export class MigrationService {
 
       await this.migrationRepository.update(
         { id: migration.id },
-        { status: 'processing', pull_requests: response.data },
+        { status: Status.PROCESSING, pull_requests: response.data },
       );
 
-      return {
+      const updatedMigration = await this.migrationRepository.findOne({
+        where: {
+          id: migration.id,
+        },
+      });
+
+      return successResponse({
         status: true,
         message: 'Migration successful',
-      };
+        data: updatedMigration,
+      });
     } catch (error) {
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
@@ -92,5 +101,112 @@ export class MigrationService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
     }
+  }
+
+  async getAll(user: User): Promise<IResponse | ServiceError> {
+    try {
+      const migrations = await this.migrationRepository.find({
+        where: {
+          user_id: user.id,
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Migrations fetched',
+        data: migrations,
+      });
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'Error getting all migrations',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getOne(user: User, id: string): Promise<IResponse | ServiceError> {
+    try {
+      const migration = await this.migrationRepository.findOne({
+        where: {
+          id,
+          user_id: user.id,
+        },
+      });
+
+      if (!migration) {
+        throw new ServiceError('Migration not found', HttpStatus.NOT_FOUND);
+      }
+
+      const existPendingPullRequest = migration.pull_requests.some(
+        (pullRequest) => pullRequest.status === 'pending',
+      );
+
+      if (existPendingPullRequest) {
+        const prsStatus = (await this.githubService.getPullRequest(
+          migration.pull_requests,
+        )) as PullRequest[];
+
+        const isStatusChange = this.isStatusChange(
+          migration.pull_requests,
+          prsStatus,
+        );
+
+        if (isStatusChange) {
+          const allPrsMerged = prsStatus.some(
+            (prStatus) => prStatus.status === 'merged',
+          );
+
+          await this.migrationRepository.update(
+            { id: migration.id },
+            {
+              pull_requests: prsStatus,
+              status: allPrsMerged ? Status.COMPLETED : Status.PROCESSING,
+            },
+          );
+        }
+      }
+
+      const updatedMigration = await this.migrationRepository.findOne({
+        where: {
+          id: migration.id,
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Migration fetched',
+        data: updatedMigration,
+      });
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'Error getting migration',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  private isStatusChange(
+    pullRequests1: PullRequest[],
+    pullRequests2: PullRequest[],
+  ): boolean {
+    if (pullRequests1.length !== pullRequests2.length) {
+      return false;
+    }
+
+    for (let i = 0; i < pullRequests1.length; i++) {
+      if (pullRequests1[i].status !== pullRequests2[i].status) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }

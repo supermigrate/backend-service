@@ -10,9 +10,11 @@ import {
   SuperBridgeApp,
 } from './interface/github.interface';
 import { installations } from './constants/github';
-import { MigrateDto } from '../../../modules/migration/dtos/migration.dto';
 import { InstallationName } from './enums/github.enum';
-import { Migrate } from '../../../modules/migration/interfaces/migration.interface';
+import {
+  Migrate,
+  PullRequest,
+} from '../../../modules/migration/interfaces/migration.interface';
 
 @Injectable()
 export class GithubService {
@@ -55,111 +57,133 @@ export class GithubService {
     }
   }
 
-  async migrate(data: Migrate, file: Express.Multer.File, logoUrl: string) {
+  async migrateData(data: Migrate, file: Express.Multer.File, logoUrl: string) {
     try {
-      const promises = installations.map(async (installation) => {
-        if (!installation.active) {
-          return;
-        }
+      const results = await this.processInstallations(
+        installations,
+        data,
+        file,
+        logoUrl,
+      );
 
-        const octokit = await this.getInstallationInstance(
-          Number(installation.id),
-        );
-
-        if (!octokit) {
-          return;
-        }
-
-        const owner = installation.owner;
-        const repo = installation.repo;
-        const path = `data/${data.symbol}/data.json`;
-        const message = `${data.symbol} data.json`;
-        const newBranchName = `migrate-${data.symbol}`;
-        const baseBranchName = installation.defaultBranch;
-        const title = `Migrate ${data.symbol}`;
-        let body = `Adding ${data.symbol} to the list of tokens`;
-
-        const isBaseChain = data.chains.some((chain) =>
-          chain.name.includes('base'),
-        );
-
-        if (
-          installation.owner === InstallationName.ETHEREUM_OPTIMISM &&
-          isBaseChain
-        ) {
-          body = `Adding ${data.symbol} to the list of tokens 
-           @cfluke-cb`;
-        }
-
-        const content = await this.getContent(
-          owner,
-          octokit,
-          installation,
-          newBranchName,
-          path,
-          data,
-          logoUrl,
-        );
-
-        await this.createNewBranchFromDefault(
-          octokit,
-          newBranchName,
-          baseBranchName,
-          owner,
-          repo,
-        );
-
-        await this.createOrUpdateFile(
-          octokit,
-          owner,
-          repo,
-          newBranchName,
-          path,
-          content,
-          message,
-        );
-
-        if (installation.owner === InstallationName.ETHEREUM_OPTIMISM) {
-          const path = `data/${data.symbol}/logo.svg`;
-          const message = `${data.symbol} logo.svg`;
-          const content = Buffer.from(file.buffer).toString('base64');
-
-          await this.createOrUpdateFile(
-            octokit,
-            owner,
-            repo,
-            newBranchName,
-            path,
-            content,
-            message,
-          );
-        }
-
-        const url = await this.createPullRequest(
-          octokit,
-          owner,
-          repo,
-          baseBranchName,
-          newBranchName,
-          title,
-          body,
-        );
-
-        return url;
-      });
-
-      const results = await Promise.all(promises);
-
+      const filteredResults = results.filter((result) => result !== undefined);
       return {
         status: true,
-        data: results,
+        data: filteredResults as PullRequest[],
       };
     } catch (error) {
       return {
         status: false,
-        message: error.message,
+        error: error.message,
       };
     }
+  }
+
+  async processInstallations(
+    installations: Installation[],
+    data: Migrate,
+    file: Express.Multer.File,
+    logoUrl: string,
+  ) {
+    const promises = installations.map((installation) =>
+      this.processInstallation(installation, data, file, logoUrl),
+    );
+
+    return Promise.all(promises);
+  }
+
+  async processInstallation(
+    installation: Installation,
+    data: Migrate,
+    file: Express.Multer.File,
+    logoUrl: string,
+  ) {
+    if (!installation.active) {
+      return;
+    }
+
+    const octokit = await this.getInstallationInstance(Number(installation.id));
+
+    if (!octokit) {
+      return;
+    }
+
+    const owner = installation.owner;
+    const repo = installation.repo;
+    const path = `data/${data.symbol}/data.json`;
+    const message = `${data.symbol} data.json`;
+    const newBranchName = `migrate-${data.symbol}`.toLowerCase();
+    const baseBranchName = installation.defaultBranch;
+    const title = `Migrate ${data.symbol}`;
+    let body = `Adding ${data.symbol} to the list of tokens`;
+
+    const isBaseChain = data.chains.some((chain) =>
+      chain.name.includes('base'),
+    );
+
+    if (
+      installation.owner === InstallationName.ETHEREUM_OPTIMISM &&
+      isBaseChain
+    ) {
+      body = `Adding ${data.symbol} to the list of tokens 
+        @cfluke-cb`;
+    }
+
+    const content = await this.getContent(
+      owner,
+      octokit,
+      installation,
+      newBranchName,
+      path,
+      data,
+      logoUrl,
+    );
+
+    await this.createNewBranchFromDefault(
+      octokit,
+      newBranchName,
+      baseBranchName,
+      owner,
+      repo,
+    );
+
+    await this.createOrUpdateFile(
+      octokit,
+      owner,
+      repo,
+      newBranchName,
+      path,
+      content,
+      message,
+    );
+
+    if (installation.owner === InstallationName.ETHEREUM_OPTIMISM) {
+      const logoPath = `data/${data.symbol}/logo.svg`;
+      const logoMessage = `${data.symbol} logo.svg`;
+      const logoContent = Buffer.from(file.buffer).toString('base64');
+
+      await this.createOrUpdateFile(
+        octokit,
+        owner,
+        repo,
+        newBranchName,
+        logoPath,
+        logoContent,
+        logoMessage,
+      );
+    }
+
+    const response = await this.createPullRequest(
+      octokit,
+      owner,
+      repo,
+      baseBranchName,
+      newBranchName,
+      title,
+      body,
+    );
+
+    return response;
   }
 
   private async getContent(
@@ -171,140 +195,142 @@ export class GithubService {
     data: Migrate,
     logoUrl: string,
   ) {
-    const contentBase64 = Buffer.from(JSON.stringify(data, null, 2)).toString(
-      'base64',
+    if (name === InstallationName.ETHEREUM_OPTIMISM) {
+      const tokens = data.chains.map((chain) => {
+        const token = {
+          [chain.name]: {
+            address: chain.token_address,
+            overrides: chain.token_detail_override || undefined,
+          },
+        };
+
+        return token;
+      });
+
+      const content: EthereumOptimism = {
+        name: data.name,
+        symbol: data.symbol,
+        decimals: data.decimals,
+        description: data.description,
+        website: data.website,
+        twitter: data.twitter,
+        tokens,
+      };
+
+      const res = await this.getFileSHA(
+        octokit,
+        installation.owner,
+        installation.repo,
+        branch,
+        path,
+      );
+
+      if (!res) {
+        const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
+          'base64',
+        );
+
+        return dataContent;
+      }
+
+      let currentData: EthereumOptimism = content;
+
+      if (res?.content) {
+        const contentDecoded = Buffer.from(res.content, 'base64').toString(
+          'utf8',
+        );
+        currentData = JSON.parse(contentDecoded);
+      }
+
+      const mergedContent = {
+        ...currentData,
+        ...content,
+        tokens: {
+          ...currentData.tokens,
+          ...content.tokens,
+        },
+      };
+
+      const updatedContentBase64 = Buffer.from(
+        JSON.stringify(mergedContent, null, 2),
+      ).toString('base64');
+
+      return updatedContentBase64;
+    }
+
+    const addresses = data.chains.map((chain) => {
+      const token = {
+        [chain.id]: {
+          address: chain.token_address,
+        },
+      };
+
+      return token;
+    });
+
+    const content: SuperBridgeApp = {
+      name: data.name,
+      symbol: data.symbol,
+      decimals: data.decimals,
+      logoURI: logoUrl,
+      opTokenId: data.symbol,
+      addresses,
+    };
+
+    const res = await this.getFileSHA(
+      octokit,
+      installation.owner,
+      installation.repo,
+      branch,
+      path,
     );
 
-    return contentBase64;
+    if (!res) {
+      const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
+        'base64',
+      );
 
-    // if (name === InstallationName.ETHEREUM_OPTIMISM) {
-    //   const tokens = data.chains.map((chain) => {
-    //     const token = {
-    //       [chain.name]: {
-    //         address: chain.token_address,
-    //         overrides: chain.token_detail_override || undefined,
-    //       },
-    //     };
+      return dataContent;
+    } else if (name === InstallationName.ETHEREUM_OPTIMISM) {
+      let currentData: SuperBridgeApp = content;
 
-    //     return token;
-    //   });
+      if (res?.content) {
+        const contentDecoded = Buffer.from(res.content, 'base64').toString(
+          'utf8',
+        );
+        currentData = JSON.parse(contentDecoded);
+      }
 
-    //   const content: EthereumOptimism = {
-    //     name: data.name,
-    //     symbol: data.symbol,
-    //     decimals: data.decimals,
-    //     description: data.description,
-    //     website: data.website,
-    //     twitter: data.twitter,
-    //     tokens,
-    //   };
+      const mergedContent = {
+        ...currentData,
+        ...content,
+        addresses: {
+          ...currentData.addresses,
+          ...content.addresses,
+        },
+      };
 
-    //   const res = await this.getFileSHA(
-    //     octokit,
-    //     installation.owner,
-    //     installation.repo,
-    //     branch,
-    //     path,
-    //   );
+      const updatedContentBase64 = Buffer.from(
+        JSON.stringify(mergedContent, null, 2),
+      ).toString('base64');
 
-    //   if (!res) {
-    //     const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
-    //       'base64',
-    //     );
+      return updatedContentBase64;
+    } else {
+      const contentBase64 = Buffer.from(JSON.stringify(data, null, 2)).toString(
+        'base64',
+      );
 
-    //     return dataContent;
-    //   }
-
-    //   let currentData: EthereumOptimism = content;
-
-    //   if (res?.content) {
-    //     const contentDecoded = Buffer.from(res.content, 'base64').toString(
-    //       'utf8',
-    //     );
-    //     currentData = JSON.parse(contentDecoded);
-    //   }
-
-    //   const mergedContent = {
-    //     ...currentData,
-    //     ...content,
-    //     tokens: {
-    //       ...currentData.tokens,
-    //       ...content.tokens,
-    //     },
-    //   };
-
-    //   const updatedContentBase64 = Buffer.from(
-    //     JSON.stringify(mergedContent, null, 2),
-    //   ).toString('base64');
-
-    //   return updatedContentBase64;
-    // }
-    // const addresses = data.chains.map((chain) => {
-    //   const token = {
-    //     [chain.id]: {
-    //       address: chain.token_address,
-    //     },
-    //   };
-
-    //   return token;
-    // });
-
-    // const content: SuperBridgeApp = {
-    //   name: data.name,
-    //   symbol: data.symbol,
-    //   decimals: data.decimals,
-    //   logoURI: logoUrl,
-    //   opTokenId: data.symbol,
-    //   addresses,
-    // };
-
-    // const res = await this.getFileSHA(
-    //   octokit,
-    //   installation.owner,
-    //   installation.repo,
-    //   branch,
-    //   path,
-    // );
-
-    // if (!res) {
-    //   const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
-    //     'base64',
-    //   );
-
-    //   return dataContent;
-    // }
-
-    // let currentData: SuperBridgeApp = content;
-
-    // if (res?.content) {
-    //   const contentDecoded = Buffer.from(res.content, 'base64').toString(
-    //     'utf8',
-    //   );
-    //   currentData = JSON.parse(contentDecoded);
-    // }
-
-    // const mergedContent = {
-    //   ...currentData,
-    //   ...content,
-    //   addresses: {
-    //     ...currentData.addresses,
-    //     ...content.addresses,
-    //   },
-    // };
-
-    // const updatedContentBase64 = Buffer.from(
-    //   JSON.stringify(mergedContent, null, 2),
-    // ).toString('base64');
-
-    // return updatedContentBase64;
+      return contentBase64;
+    }
   }
 
-  private async getInstallationInstance(installationId: number) {
+  private async getInstallationInstance(
+    installationId: number,
+  ): Promise<Octokit | null> {
     try {
-      const installationAccessToken =
-        await this.app.getInstallationOctokit(installationId);
+      const octokit = await this.app.getInstallationOctokit(installationId);
 
-      return new Octokit({ auth: installationAccessToken });
+      return octokit;
     } catch (error) {
       return null;
     }
@@ -324,13 +350,39 @@ export class GithubService {
           owner,
           repo,
           path,
-          branch,
+          ref: branch,
         },
       );
 
       return response.data as GitHubFileContentResponse;
     } catch (error) {
       return null;
+    }
+  }
+
+  private async branchExists(
+    octokit: Octokit,
+    owner: string,
+    repo: string,
+    branchName: string,
+  ) {
+    try {
+      const response = await octokit.request(
+        'GET /repos/{owner}/{repo}/branches/{branch}',
+        {
+          owner,
+          repo,
+          branch: branchName,
+        },
+      );
+
+      return response.data;
+    } catch (error) {
+      if (error.status === 404) {
+        return false;
+      }
+
+      return false;
     }
   }
 
@@ -367,15 +419,28 @@ export class GithubService {
     owner: string,
     repo: string,
   ) {
-    const {
-      data: {
-        commit: { sha },
-      },
-    } = await octokit.request('GET /repos/{owner}/{repo}/branches/{branch}', {
+    const baseBranchResponse = await this.branchExists(
+      octokit,
       owner,
       repo,
-      branch: baseBranchName,
-    });
+      baseBranchName,
+    );
+
+    let sha;
+    if (baseBranchResponse && baseBranchResponse.commit.sha) {
+      sha = baseBranchResponse.commit.sha;
+    }
+
+    const newBranchResponse = await this.branchExists(
+      octokit,
+      owner,
+      repo,
+      newBranchName,
+    );
+
+    if (newBranchResponse !== false) {
+      return newBranchResponse;
+    }
 
     const response = await octokit.request(
       'POST /repos/{owner}/{repo}/git/refs',
@@ -383,7 +448,7 @@ export class GithubService {
         owner,
         repo: repo,
         ref: `refs/heads/${newBranchName}`,
-        sha,
+        sha: sha as string,
       },
     );
 
@@ -399,15 +464,26 @@ export class GithubService {
     title: string,
     body: string,
   ) {
-    const response = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
-      owner,
-      repo,
-      title,
-      body,
-      head,
-      base,
-    });
+    try {
+      const response = await octokit.request(
+        'POST /repos/{owner}/{repo}/pulls',
+        {
+          owner,
+          repo,
+          title,
+          body,
+          head,
+          base,
+        },
+      );
 
-    return response.data.html_url;
+      return {
+        id: response.data.number,
+        url: response.data.html_url,
+        status: 'pending',
+      };
+    } catch (error) {
+      return null;
+    }
   }
 }

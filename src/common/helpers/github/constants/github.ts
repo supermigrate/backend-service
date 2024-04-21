@@ -6,6 +6,7 @@ export const installations = [
     owner: InstallationName.IAMNOTSTATIC,
     repo: 'base-migrate-test',
     defaultBranch: 'main',
+    active: true,
   },
   {
     id: 1,

@@ -10,6 +10,7 @@ export interface Installation {
   owner: InstallationName;
   repo: string;
   defaultBranch: string;
+  active: boolean;
 }
 
 export interface EthereumOptimism {

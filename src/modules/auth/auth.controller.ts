@@ -1,5 +1,6 @@
 import {
   Body,
+  ClassSerializerInterceptor,
   Controller,
   Get,
   HttpCode,
@@ -7,6 +8,7 @@ import {
   Post,
   Req,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { GithubAuthDto } from './dtos/auth.dto';
@@ -14,11 +16,12 @@ import { Request } from 'express';
 import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/responses';
 import { AuthSuccessResponse, UserSessionResponse } from './responses/auth';
-import { AuthRequest } from 'src/common/interfaces/request.interface';
-import { AuthGuard } from 'src/common/guards/auth.guard';
+import { AuthRequest } from '../../common/interfaces/request.interface';
+import { AuthGuard } from '../../common/guards/auth.guard';
 
 @ApiTags('Auth')
 @ApiBearerAuth()
+@UseInterceptors(ClassSerializerInterceptor)
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

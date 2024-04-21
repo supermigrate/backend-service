@@ -49,11 +49,7 @@ export class AuthService {
           data: {
             token,
             expire,
-            user: {
-              ...userExists,
-              _id: undefined,
-              metadata: undefined,
-            },
+            user: userExists,
           },
         });
       }
@@ -76,11 +72,7 @@ export class AuthService {
         data: {
           token,
           expire,
-          user: {
-            ...newUser,
-            _id: undefined,
-            metadata: undefined,
-          },
+          user: newUser,
         },
       });
     } catch (error) {
@@ -108,11 +100,7 @@ export class AuthService {
       return successResponse({
         status: true,
         message: 'Auth session',
-        data: {
-          ...user,
-          _id: undefined,
-          metadata: undefined,
-        },
+        data: user,
       });
     } catch (error) {
       if (error instanceof ServiceError) {

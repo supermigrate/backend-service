@@ -15,6 +15,7 @@ import {
   Migrate,
   PullRequest,
 } from '../../../modules/migration/interfaces/migration.interface';
+import { PrStatus } from '../../../modules/migration/enums/migration.enum';
 
 @Injectable()
 export class GithubService {
@@ -79,7 +80,58 @@ export class GithubService {
     }
   }
 
-  async processInstallations(
+  async getPullRequest(pullRequests: PullRequest[]) {
+    try {
+      const prs = pullRequests.map((pullRequest) =>
+        this.isPullRequestMerged(pullRequest, installations),
+      );
+
+      return Promise.all(prs);
+    } catch (error) {
+      return pullRequests;
+    }
+  }
+
+  private async isPullRequestMerged(
+    pullRequest: PullRequest,
+    installations: Installation[],
+  ) {
+    try {
+      const installation = installations.find(
+        (install) => install.id === pullRequest.installation_id,
+      );
+
+      if (!installation) {
+        return;
+      }
+
+      const octokit = await this.getInstallationInstance(
+        pullRequest.installation_id,
+      );
+
+      if (!octokit) {
+        return;
+      }
+
+      await octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/merge',
+        {
+          owner: installation.owner,
+          repo: installation.repo,
+          pull_number: pullRequest.id,
+        },
+      );
+
+      return {
+        ...pullRequest,
+        status: PrStatus.MERGED,
+      };
+    } catch (error) {
+      return pullRequest;
+    }
+  }
+
+  private async processInstallations(
     installations: Installation[],
     data: Migrate,
     file: Express.Multer.File,
@@ -92,7 +144,7 @@ export class GithubService {
     return Promise.all(promises);
   }
 
-  async processInstallation(
+  private async processInstallation(
     installation: Installation,
     data: Migrate,
     file: Express.Multer.File,
@@ -183,7 +235,7 @@ export class GithubService {
       body,
     );
 
-    return response;
+    return { ...response, installation_id: installation.id };
   }
 
   private async getContent(

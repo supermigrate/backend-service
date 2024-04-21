@@ -49,11 +49,11 @@ export class Migration {
   pull_requests: PullRequest[];
 
   @Column()
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'processing';
 
   @Exclude()
   @Column({ select: false })
-  metadata: Record<string, any>;
+  metadata: Record<string, any> | null;
 
   @Column()
   user_id: string;

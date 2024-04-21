@@ -11,7 +11,9 @@ export interface Chain {
 }
 
 export interface PullRequest {
+  id: number;
   url: string;
+  status: 'pending' | 'merged';
 }
 
 export interface Migrate {

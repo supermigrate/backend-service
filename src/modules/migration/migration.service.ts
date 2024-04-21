@@ -36,9 +36,9 @@ export class MigrationService {
         chains: formattedChains,
       };
 
-      const upload = await this.cloudinaryService.upload(file);
+      const logoUrl = await this.cloudinaryService.upload(file);
 
-      if (!upload) {
+      if (!logoUrl) {
         throw new ServiceError('Upload failed', HttpStatus.BAD_REQUEST);
       }
 
@@ -50,7 +50,7 @@ export class MigrationService {
         description: body.description,
         website: body.website,
         twitter: body.twitter,
-        logo_url: upload,
+        logo_url: logoUrl,
         user_id: user.id,
         status: 'pending',
         metadata: {},
@@ -58,10 +58,10 @@ export class MigrationService {
 
       await this.migrationRepository.save(migration);
 
-      const response = await this.githubService.migrate(
+      const response = await this.githubService.migrateData(
         formatedBody,
         file,
-        upload,
+        logoUrl,
       );
 
       if (!response.status) {
@@ -75,16 +75,14 @@ export class MigrationService {
 
       await this.migrationRepository.update(
         { id: migration.id },
-        { status: 'completed' },
+        { status: 'processing', pull_requests: response.data },
       );
 
       return {
         status: true,
         message: 'Migration successful',
-        data: response.data,
       };
     } catch (error) {
-      console.log('MigrationService -> migrate -> error', error);
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
       }

@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { MigrationService } from './migration.service';
 import { MigrationController } from './migration.controller';
-import { CloudinaryModule } from 'src/common/helpers/cloudinary/cloudinary.module';
+import { CloudinaryModule } from '../../common/helpers/cloudinary/cloudinary.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../user/entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
-import { Migration } from 'typeorm';
-import { GithubModule } from 'src/common/helpers/github/github.module';
+import { GithubModule } from '../../common/helpers/github/github.module';
+import { Migration } from './entities/migration.entity';
 
 @Module({
   imports: [

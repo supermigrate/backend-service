@@ -34,13 +34,13 @@ export class Migration {
   @Column()
   logo_url: string;
 
-  @Column({ default: null })
+  @Column()
   description: string;
 
-  @Column({ default: null })
+  @Column()
   website: string;
 
-  @Column({ default: null })
+  @Column()
   twitter: string;
 
   @Column()
@@ -54,7 +54,7 @@ export class Migration {
 
   @Exclude()
   @Column({ select: false })
-  metadata: Record<string, any> | null;
+  metadata: Record<string, any>;
 
   @Column()
   user_id: string;

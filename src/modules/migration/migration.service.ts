@@ -11,7 +11,7 @@ import { MigrateDto } from './dtos/migration.dto';
 import { GithubService } from '../../common/helpers/github/github.service';
 import { Chain, Migrate, PullRequest } from './interfaces/migration.interface';
 import { successResponse } from '../../common/responses/success.helper';
-import { Status } from './enums/migration.enum';
+import { PrStatus, Status } from './enums/migration.enum';
 
 @Injectable()
 export class MigrationService {
@@ -142,7 +142,7 @@ export class MigrationService {
       }
 
       const existPendingPullRequest = migration.pull_requests.some(
-        (pullRequest) => pullRequest.status === 'pending',
+        (pullRequest) => pullRequest.status === PrStatus.PENDING,
       );
 
       if (existPendingPullRequest) {
@@ -157,7 +157,7 @@ export class MigrationService {
 
         if (isStatusChange) {
           const allPrsMerged = prsStatus.some(
-            (prStatus) => prStatus.status === 'merged',
+            (prStatus) => prStatus.status === PrStatus.MERGED,
           );
 
           await this.migrationRepository.update(

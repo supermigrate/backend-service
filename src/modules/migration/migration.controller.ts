@@ -3,6 +3,7 @@ import {
   ClassSerializerInterceptor,
   Controller,
   Get,
+  HttpStatus,
   MaxFileSizeValidator,
   Param,
   ParseFilePipe,
@@ -13,13 +14,15 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { MigrationService } from './migration.service';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../../common/guards/auth.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthRequest } from '../../common/interfaces/request.interface';
 import { env } from '../../common/config/env';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
 import { MigrateDto } from './dtos/migration.dto';
+import { ErrorResponse } from 'src/common/responses';
+import { MigrationResponse, MigrationsResponse } from './responses/migration';
 
 @ApiTags('Migration')
 @ApiBearerAuth()
@@ -29,6 +32,16 @@ import { MigrateDto } from './dtos/migration.dto';
 export class MigrationController {
   constructor(private readonly migrationService: MigrationService) {}
 
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Migration successful',
+    type: MigrationResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Migration failed',
+    type: ErrorResponse,
+  })
   @UseInterceptors(FileInterceptor('logo'))
   @Post()
   async migrate(
@@ -51,11 +64,31 @@ export class MigrationController {
     return this.migrationService.migrate(req.user, file, body);
   }
 
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Migrations fetched',
+    type: MigrationsResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error getting all migrations',
+    type: ErrorResponse,
+  })
   @Get()
   async getAll(@Req() req: AuthRequest) {
     return this.migrationService.getAll(req.user);
   }
 
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Migrations fetched',
+    type: MigrationResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error getting all migrations',
+    type: ErrorResponse,
+  })
   @Get('/:id')
   async getOne(@Req() req: AuthRequest, @Param('id') id: string) {
     return this.migrationService.getOne(req.user, id);

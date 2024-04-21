@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { v2 } from 'cloudinary';
-import { env } from 'src/common/config/env';
+import { env } from '../../config/env';
 
 v2.config({
   cloud_name: env.cloudinary.cloudName,

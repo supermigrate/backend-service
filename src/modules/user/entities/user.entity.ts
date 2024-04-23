@@ -20,6 +20,10 @@ export class User {
   @PrimaryColumn()
   id: string;
 
+  @Exclude()
+  @Column({ unique: true, select: false })
+  github_id: number;
+
   @Column()
   name: string;
 
@@ -32,8 +36,8 @@ export class User {
   @Column()
   ip_address: string;
 
-  @Column({ select: false })
   @Exclude()
+  @Column({ select: false })
   metadata: Record<string, any>;
 
   @CreateDateColumn()

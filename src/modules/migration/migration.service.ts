@@ -54,6 +54,7 @@ export class MigrationService {
         twitter: body.twitter,
         logo_url: logoUrl,
         user_id: user.id,
+        chains: formatedBody.chains,
         status: Status.PENDING,
         metadata: {},
       });

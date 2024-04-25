@@ -4,6 +4,7 @@ export interface Chain {
   id: number;
   name: string;
   token_address: string;
+  deployer_address?: string;
   token_detail_override?: {
     name?: string;
     symbol?: string;

@@ -1,5 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
+import { validateSync } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
 import { User } from '../user/entities/user.entity';
 import { IResponse } from '../../common/interfaces/response.interface';
 import { ServiceError } from '../../common/errors/service.error';
@@ -7,7 +9,7 @@ import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.se
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Migration } from './entities/migration.entity';
-import { MigrateDto } from './dtos/migration.dto';
+import { ChainDto, MigrateDto } from './dtos/migration.dto';
 import { GithubService } from '../../common/helpers/github/github.service';
 import { Chain, Migrate, PullRequest } from './interfaces/migration.interface';
 import { successResponse } from '../../common/responses/success.helper';
@@ -32,6 +34,8 @@ export class MigrationService {
       if (!Array.isArray(formattedChains)) {
         throw new ServiceError('Invalid chains', HttpStatus.BAD_REQUEST);
       }
+
+      this.validateBodyChains(formattedChains);
 
       const formatedBody: Migrate = {
         ...body,
@@ -209,5 +213,23 @@ export class MigrationService {
     }
 
     return false;
+  }
+
+  private validateBodyChains(chainsData: Chain[]) {
+    chainsData.forEach((chain) => {
+      const chainDTO = plainToInstance(ChainDto, chain);
+
+      const validationErrors = validateSync(chainDTO);
+
+      if (validationErrors.length > 0) {
+        const errorMessage = Object.values(
+          validationErrors[0].constraints as {
+            [type: string]: string;
+          },
+        )[0];
+
+        throw new ServiceError(errorMessage, HttpStatus.BAD_REQUEST);
+      }
+    });
   }
 }

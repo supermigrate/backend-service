@@ -15,6 +15,7 @@ import { UserModule } from './modules/user/user.module';
 import { MigrationModule } from './modules/migration/migration.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GithubModule } from './common/helpers/github/github.module';
+import { CloudinaryModule } from './common/helpers/cloudinary/cloudinary.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -38,6 +39,7 @@ const envPath = getEnvPath();
     MigrationModule,
     AuthModule,
     GithubModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [

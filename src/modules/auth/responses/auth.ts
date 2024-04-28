@@ -29,7 +29,7 @@ export class AuthSuccessResponse {
 
 export class UserSessionResponse {
   @ApiProperty()
-  statusCode: number;
+  status: boolean;
 
   @ApiProperty()
   message: string;

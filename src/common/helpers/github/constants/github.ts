@@ -2,7 +2,7 @@ import { InstallationName } from '../enums/github.enum';
 
 export const installations = [
   {
-    id: 49790473,
+    id: 50166315,
     owner: InstallationName.IAMNOTSTATIC,
     repo: 'base-migrate-test',
     defaultBranch: 'main',

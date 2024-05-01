@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsEthereumAddress,
   IsNotEmpty,
@@ -70,9 +71,10 @@ export class ChainDto {
   @IsEthereumAddress()
   deployer_address: string;
 
-  @IsObject()
   @IsOptional()
+  @IsObject()
   @ValidateNested()
+  @Type(() => ChainTokenDetail)
   token_detail_override: ChainTokenDetail;
 
   @IsString()

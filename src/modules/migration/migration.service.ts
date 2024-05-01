@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
@@ -7,7 +7,7 @@ import { IResponse } from '../../common/interfaces/response.interface';
 import { ServiceError } from '../../common/errors/service.error';
 import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MongoRepository } from 'typeorm';
 import { Migration } from './entities/migration.entity';
 import { ChainDto, MigrateDto } from './dtos/migration.dto';
 import { GithubService } from '../../common/helpers/github/github.service';
@@ -19,10 +19,12 @@ import { PrStatus, Status } from './enums/migration.enum';
 export class MigrationService {
   constructor(
     @InjectRepository(Migration)
-    private readonly migrationRepository: Repository<Migration>,
+    private readonly migrationRepository: MongoRepository<Migration>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly githubService: GithubService,
   ) {}
+
+  private readonly logger = new Logger(MigrationService.name);
   async migrate(
     user: User,
     file: Express.Multer.File,
@@ -36,6 +38,29 @@ export class MigrationService {
       }
 
       this.validateBodyChains(formattedChains);
+
+      const l1Chain: Chain = formattedChains[0];
+      const l2Chain: Chain = formattedChains[1];
+
+      const existMigration = await this.migrationRepository.findOne({
+        where: {
+          $or: [
+            {
+              'chains.token_address': l1Chain.token_address,
+            },
+            {
+              'chains.token_address': l2Chain.token_address,
+            },
+          ],
+        },
+      });
+
+      if (existMigration && existMigration.status !== Status.FAILED) {
+        throw new ServiceError(
+          'Migration already exist, update existing migration instead',
+          409,
+        );
+      }
 
       const formatedBody: Migrate = {
         ...body,
@@ -67,8 +92,9 @@ export class MigrationService {
 
       const response = await this.githubService.migrateData(
         formatedBody,
-        file,
+        user.username,
         logoUrl,
+        file,
       );
 
       if (!response.status) {
@@ -77,7 +103,10 @@ export class MigrationService {
           { status: Status.FAILED },
         );
 
-        throw new ServiceError('Migration failed', HttpStatus.BAD_REQUEST);
+        throw new ServiceError(
+          'Migration failed, please try again',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       await this.migrationRepository.update(
@@ -94,6 +123,100 @@ export class MigrationService {
       return successResponse({
         status: true,
         message: 'Migration successful',
+        data: updatedMigration,
+      });
+    } catch (error) {
+      this.logger.error('Migration Failed', error);
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'Error migrating data',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async update(
+    user: User,
+    id: string,
+    body: ChainDto,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const migration = await this.migrationRepository.findOne({
+        where: {
+          id,
+        },
+      });
+
+      if (!migration) {
+        throw new ServiceError('Migration not found', HttpStatus.NOT_FOUND);
+      }
+
+      const isChainExist = migration.chains.find(
+        (chain) =>
+          chain.id === body.id && chain.token_address === body.token_address,
+      );
+
+      if (isChainExist) {
+        throw new ServiceError(
+          'Chain already migrated',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const migrate: Migrate = {
+        name: migration.name,
+        symbol: migration.symbol,
+        decimals: migration.decimals,
+        description: migration.description,
+        website: migration.website,
+        twitter: migration.twitter,
+        chains: [body],
+      };
+
+      const response = await this.githubService.migrateData(
+        migrate,
+        user.username,
+        migration.logo_url,
+      );
+
+      if (!response.status) {
+        throw new ServiceError('Migration failed', HttpStatus.BAD_REQUEST);
+      }
+
+      const mergePrs = [
+        ...migration.pull_requests,
+        ...(response.data as PullRequest[]),
+      ];
+
+      const uniqueMergedPrs = mergePrs.filter((obj, index, self) => {
+        if (!obj.hasOwnProperty('id')) {
+          return false;
+        }
+
+        const firstIndex = self.findIndex((o) => o.id === obj.id);
+
+        return index === firstIndex;
+      });
+
+      migration.status = Status.PROCESSING;
+      migration.pull_requests = uniqueMergedPrs;
+      migration.chains.push(body as Chain);
+
+      await this.migrationRepository.save(migration);
+
+      const updatedMigration = await this.migrationRepository.findOne({
+        where: {
+          id: migration.id,
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Migration updated successful',
         data: updatedMigration,
       });
     } catch (error) {

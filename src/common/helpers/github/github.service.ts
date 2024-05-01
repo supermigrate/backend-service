@@ -58,13 +58,19 @@ export class GithubService {
     }
   }
 
-  async migrateData(data: Migrate, file: Express.Multer.File, logoUrl: string) {
+  async migrateData(
+    data: Migrate,
+    username: string,
+    logoUrl: string,
+    file?: Express.Multer.File,
+  ) {
     try {
       const results = await this.processInstallations(
         installations,
         data,
-        file,
+        username,
         logoUrl,
+        file,
       );
 
       const filteredResults = results.filter((result) => result !== undefined);
@@ -134,11 +140,12 @@ export class GithubService {
   private async processInstallations(
     installations: Installation[],
     data: Migrate,
-    file: Express.Multer.File,
+    username: string,
     logoUrl: string,
+    file?: Express.Multer.File,
   ) {
     const promises = installations.map((installation) =>
-      this.processInstallation(installation, data, file, logoUrl),
+      this.processInstallation(installation, data, username, logoUrl, file),
     );
 
     return Promise.all(promises);
@@ -147,8 +154,9 @@ export class GithubService {
   private async processInstallation(
     installation: Installation,
     data: Migrate,
-    file: Express.Multer.File,
+    username: string,
     logoUrl: string,
+    file?: Express.Multer.File,
   ) {
     if (!installation.active) {
       return;
@@ -160,25 +168,35 @@ export class GithubService {
       return;
     }
 
+    const chainsLength = data.chains.length;
+    const l2Chain = data.chains[chainsLength - 1];
+
     const owner = installation.owner;
     const repo = installation.repo;
     const path = `data/${data.symbol}/data.json`;
-    const message = `${data.symbol} data.json`;
-    const newBranchName = `migrate-${data.symbol}`.toLowerCase();
+    const message = `add ${data.symbol} ${l2Chain.name} data.json`;
+    const newBranchName = `add-${data.symbol}-${l2Chain.name}`.toLowerCase();
     const baseBranchName = installation.defaultBranch;
-    const title = `Migrate ${data.symbol}`;
-    let body = `Adding ${data.symbol} to the list of tokens`;
+    const title = `Add ${data.symbol} to ${l2Chain.name}`;
+    let body = `Adding ${data.symbol} to the superchain token list repo. Tagging @${username} for verification \n\n\n @${username}`;
 
     const isBaseChain = data.chains.some((chain) =>
       chain.name.includes('base'),
+    );
+    const isZoraChain = data.chains.some((chain) =>
+      chain.name.includes('zora'),
     );
 
     if (
       installation.owner === InstallationName.ETHEREUM_OPTIMISM &&
       isBaseChain
     ) {
-      body = `Adding ${data.symbol} to the list of tokens 
-        @cfluke-cb`;
+      body = `Adding ${data.symbol} to the superchain token list repo. Tagging @${username} for verification\n\n cc @cb-fluke @taycaldwell @wbnns`;
+    } else if (
+      installation.owner === InstallationName.ETHEREUM_OPTIMISM &&
+      isZoraChain
+    ) {
+      body = `Adding ${data.symbol} to the superchain token list repo. Tagging @${username} for verification\n\n cc @tbtstl`;
     }
 
     const content = await this.getContent(
@@ -209,7 +227,7 @@ export class GithubService {
       message,
     );
 
-    if (installation.owner === InstallationName.ETHEREUM_OPTIMISM) {
+    if (installation.owner === InstallationName.ETHEREUM_OPTIMISM && file) {
       const logoPath = `data/${data.symbol}/logo.svg`;
       const logoMessage = `${data.symbol} logo.svg`;
       const logoContent = Buffer.from(file.buffer).toString('base64');
@@ -235,7 +253,11 @@ export class GithubService {
       body,
     );
 
-    return { ...response, installation_id: installation.id };
+    return {
+      ...response,
+      chain: l2Chain.name,
+      installation_id: installation.id,
+    };
   }
 
   private async getContent(
@@ -278,9 +300,9 @@ export class GithubService {
       );
 
       if (!res) {
-        const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
-          'base64',
-        );
+        const dataContent = Buffer.from(
+          JSON.stringify(content, null, 2),
+        ).toString('base64');
 
         return dataContent;
       }
@@ -308,42 +330,51 @@ export class GithubService {
       ).toString('base64');
 
       return updatedContentBase64;
-    }
-
-    const addresses = data.chains.map((chain) => {
-      const token = {
-        [chain.id]: {
-          address: chain.token_address,
-        },
+    } else if (name === InstallationName.SUPERBRIDGEAPP) {
+      let content: SuperBridgeApp = {
+        name: data.name,
+        symbol: data.symbol,
+        decimals: data.decimals,
+        logoURI: logoUrl,
+        opTokenId: data.symbol,
+        addresses: [],
       };
 
-      return token;
-    });
+      const addresses = data.chains.map((chain) => {
+        const token = {
+          [chain.id]: {
+            address: chain.token_address,
+          },
+        };
 
-    const content: SuperBridgeApp = {
-      name: data.name,
-      symbol: data.symbol,
-      decimals: data.decimals,
-      logoURI: logoUrl,
-      opTokenId: data.symbol,
-      addresses,
-    };
+        if (chain.token_detail_override) {
+          content = {
+            ...content,
+            ...chain.token_detail_override,
+          };
+        }
 
-    const res = await this.getFileSHA(
-      octokit,
-      installation.owner,
-      installation.repo,
-      branch,
-      path,
-    );
+        return token;
+      });
 
-    if (!res) {
-      const dataContent = Buffer.from(JSON.stringify(data, null, 2)).toString(
-        'base64',
+      content.addresses = addresses;
+
+      const res = await this.getFileSHA(
+        octokit,
+        installation.owner,
+        installation.repo,
+        branch,
+        path,
       );
 
-      return dataContent;
-    } else if (name === InstallationName.ETHEREUM_OPTIMISM) {
+      if (!res) {
+        const dataContent = Buffer.from(
+          JSON.stringify(content, null, 2),
+        ).toString('base64');
+
+        return dataContent;
+      }
+
       let currentData: SuperBridgeApp = content;
 
       if (res?.content) {
@@ -535,7 +566,7 @@ export class GithubService {
         status: 'pending',
       };
     } catch (error) {
-      return null;
+      return;
     }
   }
 }

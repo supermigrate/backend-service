@@ -7,6 +7,7 @@ import {
   MaxFileSizeValidator,
   Param,
   ParseFilePipe,
+  Patch,
   Post,
   Req,
   UploadedFile,
@@ -20,7 +21,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthRequest } from '../../common/interfaces/request.interface';
 import { env } from '../../common/config/env';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
-import { MigrateDto } from './dtos/migration.dto';
+import { ChainDto, MigrateDto } from './dtos/migration.dto';
 import { ErrorResponse } from 'src/common/responses';
 import { MigrationResponse, MigrationsResponse } from './responses/migration';
 
@@ -62,6 +63,24 @@ export class MigrationController {
     @Body() body: MigrateDto,
   ) {
     return this.migrationService.migrate(req.user, file, body);
+  }
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Migration updated successful',
+    type: MigrationResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Migration failed',
+    type: ErrorResponse,
+  })
+  @Patch('/:id')
+  async update(
+    @Req() req: AuthRequest,
+    @Param('id') id: string,
+    @Body() body: ChainDto,
+  ) {
+    return await this.migrationService.update(req.user, id, body);
   }
 
   @ApiResponse({

@@ -18,6 +18,7 @@ export interface PullRequest {
   installation_id: number;
   url: string;
   status: PrStatus;
+  chain: string;
 }
 
 export interface Migrate {

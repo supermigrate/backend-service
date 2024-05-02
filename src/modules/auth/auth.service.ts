@@ -33,15 +33,20 @@ export class AuthService {
       }
 
       const userExists = await this.userRepository.findOne({
-        where: { username: user?.data?.login },
+        where: { github_id: user?.data?.id },
       });
 
       if (userExists) {
         const { token, expire } = await this.generateToken(userExists.id);
 
-        await this.userRepository.update(userExists._id, {
-          ip_address: ipAddress,
-        });
+        if (userExists.ip_address !== ipAddress) {
+          await this.userRepository.update(
+            { id: userExists.id },
+            {
+              ip_address: ipAddress,
+            },
+          );
+        }
 
         return successResponse({
           status: true,
@@ -49,17 +54,14 @@ export class AuthService {
           data: {
             token,
             expire,
-            user: {
-              ...userExists,
-              _id: undefined,
-              metadata: undefined,
-            },
+            user: userExists,
           },
         });
       }
 
       const newUser = this.userRepository.create({
         id: uuidv4(),
+        github_id: user.data?.id,
         name: user?.data?.name as string,
         username: user?.data?.login,
         avatar_url: user?.data?.avatar_url,
@@ -76,11 +78,7 @@ export class AuthService {
         data: {
           token,
           expire,
-          user: {
-            ...newUser,
-            _id: undefined,
-            metadata: undefined,
-          },
+          user: newUser,
         },
       });
     } catch (error) {
@@ -108,11 +106,7 @@ export class AuthService {
       return successResponse({
         status: true,
         message: 'Auth session',
-        data: {
-          ...user,
-          _id: undefined,
-          metadata: undefined,
-        },
+        data: user,
       });
     } catch (error) {
       if (error instanceof ServiceError) {

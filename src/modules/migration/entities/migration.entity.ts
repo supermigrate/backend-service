@@ -4,16 +4,23 @@ import {
   Entity,
   ObjectId,
   ObjectIdColumn,
+  PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Chain, PullRequest } from '../interfaces/migration.interface';
+import { Exclude } from 'class-transformer';
+import { Status } from '../enums/migration.enum';
 
 @Entity({
   name: 'migrations',
 })
 export class Migration {
-  @ObjectIdColumn()
-  id: ObjectId;
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
 
   @Column()
   name: string;
@@ -27,13 +34,13 @@ export class Migration {
   @Column()
   logo_url: string;
 
-  @Column({ default: null })
+  @Column()
   description: string;
 
-  @Column({ default: null })
+  @Column()
   website: string;
 
-  @Column({ default: null })
+  @Column()
   twitter: string;
 
   @Column()
@@ -43,9 +50,10 @@ export class Migration {
   pull_requests: PullRequest[];
 
   @Column()
-  status: 'pending' | 'completed' | 'failed';
+  status: Status;
 
-  @Column()
+  @Exclude()
+  @Column({ select: false })
   metadata: Record<string, any>;
 
   @Column()

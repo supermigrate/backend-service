@@ -26,17 +26,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
       typeof exceptionResponse.message === 'string'
     ) {
       response.status(status).json({
-        statusCode: status,
-        message: exceptionResponse.message || exceptionResponse,
-        error: exceptionResponse.error || exceptionResponse,
+        ...exceptionResponse,
       });
     } else {
       const arrayMessage = exceptionResponse.message;
 
       response.status(status).json({
-        statusCode: status,
+        status: false,
         message: arrayMessage?.[arrayMessage?.length - 1],
-        error: exceptionResponse.error,
       });
     }
   }

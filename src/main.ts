@@ -8,6 +8,7 @@ import * as compression from 'compression';
 import * as requestIp from 'request-ip';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { env } from './common/config/env';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -66,6 +67,6 @@ async function bootstrap() {
       console.log('Uncaught Exception thrown', { err });
     });
 
-  await app.listen(3000);
+  await app.listen(process.env.PORT ?? env.app.port);
 }
 bootstrap();

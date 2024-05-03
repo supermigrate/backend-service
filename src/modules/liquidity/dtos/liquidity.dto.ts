@@ -1,13 +1,25 @@
 import {
   IsEnum,
   IsEthereumAddress,
+  IsInt,
   IsNotEmpty,
+  IsObject,
   IsString,
+  ValidateNested,
 } from 'class-validator';
-import { Chain } from 'src/modules/migration/responses/migration';
 import { Provider } from '../enums/liquidity.enum';
+import { Type } from 'class-transformer';
 
-export class Create {
+class LiquidityChainDto {
+  @IsNotEmpty()
+  @IsInt()
+  id: number;
+
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+}
+export class CreateDto {
   @IsNotEmpty()
   @IsEthereumAddress()
   pool_token_a_address: string;
@@ -41,8 +53,10 @@ export class Create {
   deployer_address: string;
 
   @IsNotEmpty()
-  @IsEnum(Chain)
-  chain: Chain;
+  @IsObject({ each: true })
+  @ValidateNested({ each: true })
+  @Type(() => LiquidityChainDto)
+  chain: LiquidityChainDto;
 
   @IsNotEmpty()
   @IsEnum(Provider)

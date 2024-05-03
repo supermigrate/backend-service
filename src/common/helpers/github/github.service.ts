@@ -255,6 +255,8 @@ export class GithubService {
 
     return {
       ...response,
+      repo: installation.repo,
+      owner: installation.owner,
       chain: l2Chain.name,
       installation_id: installation.id,
     };

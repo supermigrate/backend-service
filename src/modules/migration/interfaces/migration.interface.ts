@@ -1,3 +1,4 @@
+import { InstallationName } from '../../../common/helpers/github/enums/github.enum';
 import { PrStatus } from '../enums/migration.enum';
 
 export interface Chain {
@@ -16,6 +17,8 @@ export interface Chain {
 export interface PullRequest {
   id: number;
   installation_id: number;
+  repo: string;
+  owner: InstallationName;
   url: string;
   status: PrStatus;
   chain: string;

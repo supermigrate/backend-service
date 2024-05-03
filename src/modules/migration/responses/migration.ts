@@ -33,6 +33,12 @@ export class PullRequest {
   id: number;
 
   @ApiProperty()
+  repo: string;
+
+  @ApiProperty()
+  owner: string;
+
+  @ApiProperty()
   installation_id: number;
 
   @ApiProperty()

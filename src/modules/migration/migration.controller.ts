@@ -25,7 +25,7 @@ import { ChainDto, MigrateDto } from './dtos/migration.dto';
 import { ErrorResponse } from 'src/common/responses';
 import { MigrationResponse, MigrationsResponse } from './responses/migration';
 
-@ApiTags('Migration')
+@ApiTags('Migrations')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
@@ -34,7 +34,7 @@ export class MigrationController {
   constructor(private readonly migrationService: MigrationService) {}
 
   @ApiResponse({
-    status: HttpStatus.OK,
+    status: HttpStatus.CREATED,
     description: 'Migration successful',
     type: MigrationResponse,
   })

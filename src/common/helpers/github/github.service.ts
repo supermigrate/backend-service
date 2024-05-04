@@ -174,7 +174,7 @@ export class GithubService {
     const owner = installation.owner;
     const repo = installation.repo;
     const path = `data/${data.symbol}/data.json`;
-    const message = `add ${data.symbol} ${l2Chain.name} data.json`;
+    const message = `${data.symbol} ${l2Chain.name} data.json`;
     const newBranchName = `add-${data.symbol}-${l2Chain.name}`.toLowerCase();
     const baseBranchName = installation.defaultBranch;
     const title = `Add ${data.symbol} to ${l2Chain.name}`;

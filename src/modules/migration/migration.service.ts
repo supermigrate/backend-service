@@ -42,26 +42,6 @@ export class MigrationService {
       const l1Chain: Chain = formattedChains[0];
       const l2Chain: Chain = formattedChains[1];
 
-      const existMigration = await this.migrationRepository.findOne({
-        where: {
-          $or: [
-            {
-              'chains.token_address': l1Chain.token_address,
-            },
-            {
-              'chains.token_address': l2Chain.token_address,
-            },
-          ],
-        },
-      });
-
-      if (existMigration && existMigration.status !== Status.FAILED) {
-        throw new ServiceError(
-          'Migration already exist, update existing migration instead',
-          409,
-        );
-      }
-
       const formatedBody: Migrate = {
         ...body,
         chains: formattedChains,
@@ -71,6 +51,61 @@ export class MigrationService {
 
       if (!logoUrl) {
         throw new ServiceError('Upload failed', HttpStatus.BAD_REQUEST);
+      }
+
+      const response = await this.githubService.migrateData(
+        formatedBody,
+        user.username,
+        logoUrl,
+        file,
+      );
+
+      if (!response.status) {
+        throw new ServiceError(
+          'Migration failed, please try again',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const existMigration = await this.migrationRepository.findOne({
+        where: {
+          $or: [
+            {
+              'chains.token_address': l1Chain.token_address,
+              'chains.id': l1Chain.id,
+            },
+            {
+              'chains.token_address': l2Chain.token_address,
+              'chains.id': l2Chain.id,
+            },
+          ],
+        },
+      });
+
+      if (existMigration && existMigration.status !== Status.FAILED) {
+        const mergePrs = [
+          ...existMigration.pull_requests,
+          ...(response.data as PullRequest[]),
+        ];
+
+        const uniqueMergedPrs = this.getUniqueMergedPrs(mergePrs);
+
+        await this.migrationRepository.update(
+          { id: existMigration.id, logo_url: logoUrl },
+          { status: Status.PROCESSING, pull_requests: uniqueMergedPrs },
+        );
+
+        const updatedMigration = await this.migrationRepository.findOne({
+          where: {
+            id: existMigration.id,
+          },
+        });
+
+        return successResponse({
+          status: true,
+          message: 'Migration updated successful',
+          data: updatedMigration,
+        });
       }
 
       const migration = this.migrationRepository.create({
@@ -89,25 +124,6 @@ export class MigrationService {
       });
 
       await this.migrationRepository.save(migration);
-
-      const response = await this.githubService.migrateData(
-        formatedBody,
-        user.username,
-        logoUrl,
-        file,
-      );
-
-      if (!response.status) {
-        await this.migrationRepository.update(
-          { id: migration.id },
-          { status: Status.FAILED },
-        );
-
-        throw new ServiceError(
-          'Migration failed, please try again',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
 
       await this.migrationRepository.update(
         { id: migration.id },
@@ -192,15 +208,7 @@ export class MigrationService {
         ...(response.data as PullRequest[]),
       ];
 
-      const uniqueMergedPrs = mergePrs.filter((obj, index, self) => {
-        if (!obj.hasOwnProperty('id')) {
-          return false;
-        }
-
-        const firstIndex = self.findIndex((o) => o.id === obj.id);
-
-        return index === firstIndex;
-      });
+      const uniqueMergedPrs = this.getUniqueMergedPrs(mergePrs);
 
       migration.status = Status.PROCESSING;
       migration.pull_requests = uniqueMergedPrs;
@@ -270,7 +278,7 @@ export class MigrationService {
       }
 
       const existPendingPullRequest = migration.pull_requests.some(
-        (pullRequest) => pullRequest.status === PrStatus.PENDING,
+        (pullRequest) => pullRequest.status === PrStatus.OPEN,
       );
 
       if (existPendingPullRequest) {
@@ -288,11 +296,22 @@ export class MigrationService {
             (prStatus) => prStatus.status === PrStatus.MERGED,
           );
 
+          const allPrsClosed = prsStatus.every(
+            (prStatus) => prStatus.status === PrStatus.CLOSED,
+          );
+
+          let status = Status.PROCESSING;
+          if (allPrsMerged) {
+            status = Status.COMPLETED;
+          } else if (allPrsClosed) {
+            status = Status.PROCESSING;
+          }
+
           await this.migrationRepository.update(
             { id: migration.id },
             {
               pull_requests: prsStatus,
-              status: allPrsMerged ? Status.COMPLETED : Status.PROCESSING,
+              status,
             },
           );
         }
@@ -336,6 +355,18 @@ export class MigrationService {
     }
 
     return false;
+  }
+
+  private getUniqueMergedPrs(mergePrs: PullRequest[]): PullRequest[] {
+    return mergePrs.filter((obj, index, self) => {
+      if (!obj.hasOwnProperty('id')) {
+        return false;
+      }
+
+      const firstIndex = self.findIndex((o) => o.id === obj.id);
+
+      return index === firstIndex;
+    });
   }
 
   private validateBodyChains(chainsData: Chain[]) {

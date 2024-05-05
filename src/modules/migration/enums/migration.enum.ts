@@ -6,6 +6,7 @@ export enum Status {
 }
 
 export enum PrStatus {
-  PENDING = 'pending',
+  OPEN = 'open',
   MERGED = 'merged',
+  CLOSED = 'closed',
 }

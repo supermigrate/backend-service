@@ -14,6 +14,7 @@ import { GithubService } from '../../common/helpers/github/github.service';
 import { Chain, Migrate, PullRequest } from './interfaces/migration.interface';
 import { successResponse } from '../../common/responses/success.helper';
 import { PrStatus, Status } from './enums/migration.enum';
+import { HttpService } from '@nestjs/axios';
 
 @Injectable()
 export class MigrationService {
@@ -22,6 +23,7 @@ export class MigrationService {
     private readonly migrationRepository: MongoRepository<Migration>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly githubService: GithubService,
+    private readonly httpService: HttpService,
   ) {}
 
   private readonly logger = new Logger(MigrationService.name);
@@ -47,6 +49,84 @@ export class MigrationService {
         chains: formattedChains,
       };
 
+      const existMigration = await this.migrationRepository.findOne({
+        where: {
+          $or: [
+            {
+              'chains.token_address': l1Chain.token_address,
+              'chains.id': l1Chain.id,
+            },
+            {
+              'chains.token_address': l2Chain.token_address,
+              'chains.id': l2Chain.id,
+            },
+          ],
+        },
+      });
+
+      if (existMigration && existMigration.status !== Status.FAILED) {
+        const imageBuffer = await this.fetchImageAsStream(
+          existMigration.logo_url,
+        );
+        const imageBuffer2 = file.buffer;
+
+        let logoUrl = existMigration.logo_url;
+
+        if (imageBuffer.compare(imageBuffer2) !== 0) {
+          logoUrl = await this.cloudinaryService.upload(file);
+
+          if (!logoUrl) {
+            throw new ServiceError('Upload failed', HttpStatus.BAD_REQUEST);
+          }
+        }
+
+        const response = await this.githubService.migrateData(
+          formatedBody,
+          user.username,
+          logoUrl,
+          file,
+        );
+
+        if (!response.status) {
+          throw new ServiceError(
+            'Migration failed, please try again',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        const mergePrs = [
+          ...existMigration.pull_requests,
+          ...(response.data as PullRequest[]),
+        ];
+
+        const uniqueMergedPrs = this.getUniqueArray(mergePrs) as PullRequest[];
+
+        const mergeChains = [...existMigration.chains, ...formatedBody.chains];
+        const uniqueMergedChains = this.getUniqueArray(mergeChains) as Chain[];
+
+        await this.migrationRepository.update(
+          { id: existMigration.id },
+          {
+            status: Status.PROCESSING,
+            pull_requests: uniqueMergedPrs,
+            chains: uniqueMergedChains,
+            logo_url: logoUrl,
+          },
+        );
+
+        const updatedMigration = await this.migrationRepository.findOne({
+          where: {
+            id: existMigration.id,
+          },
+        });
+
+        return successResponse({
+          status: true,
+          message: 'Migration updated successful',
+          data: updatedMigration,
+        });
+      }
+
       const logoUrl = await this.cloudinaryService.upload(file);
 
       if (!logoUrl) {
@@ -65,47 +145,6 @@ export class MigrationService {
           'Migration failed, please try again',
           HttpStatus.BAD_REQUEST,
         );
-      }
-
-      const existMigration = await this.migrationRepository.findOne({
-        where: {
-          $or: [
-            {
-              'chains.token_address': l1Chain.token_address,
-              'chains.id': l1Chain.id,
-            },
-            {
-              'chains.token_address': l2Chain.token_address,
-              'chains.id': l2Chain.id,
-            },
-          ],
-        },
-      });
-
-      if (existMigration && existMigration.status !== Status.FAILED) {
-        const mergePrs = [
-          ...existMigration.pull_requests,
-          ...(response.data as PullRequest[]),
-        ];
-
-        const uniqueMergedPrs = this.getUniqueMergedPrs(mergePrs);
-
-        await this.migrationRepository.update(
-          { id: existMigration.id, logo_url: logoUrl },
-          { status: Status.PROCESSING, pull_requests: uniqueMergedPrs },
-        );
-
-        const updatedMigration = await this.migrationRepository.findOne({
-          where: {
-            id: existMigration.id,
-          },
-        });
-
-        return successResponse({
-          status: true,
-          message: 'Migration updated successful',
-          data: updatedMigration,
-        });
       }
 
       const migration = this.migrationRepository.create({
@@ -208,7 +247,7 @@ export class MigrationService {
         ...(response.data as PullRequest[]),
       ];
 
-      const uniqueMergedPrs = this.getUniqueMergedPrs(mergePrs);
+      const uniqueMergedPrs = this.getUniqueArray(mergePrs) as PullRequest[];
 
       migration.status = Status.PROCESSING;
       migration.pull_requests = uniqueMergedPrs;
@@ -357,8 +396,14 @@ export class MigrationService {
     return false;
   }
 
-  private getUniqueMergedPrs(mergePrs: PullRequest[]): PullRequest[] {
-    return mergePrs.filter((obj, index, self) => {
+  private getUniqueArray(
+    mergedArray: {
+      id: number;
+    }[],
+  ): {
+    id: number;
+  }[] {
+    return mergedArray.filter((obj, index, self) => {
       if (!obj.hasOwnProperty('id')) {
         return false;
       }
@@ -385,5 +430,43 @@ export class MigrationService {
         throw new ServiceError(errorMessage, HttpStatus.BAD_REQUEST);
       }
     });
+  }
+
+  private async fetchImageAsStream(imageUrl: string): Promise<Buffer> {
+    try {
+      const response = await this.httpService.axiosRef.get(imageUrl, {
+        responseType: 'stream',
+      });
+
+      if (response.status !== 200) {
+        throw new ServiceError(`Failed to fetch image`, response.status);
+      }
+
+      const bufferPromise = new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+
+        response.data.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+
+        response.data.on('end', () => {
+          resolve(Buffer.concat(chunks));
+        });
+
+        response.data.on('error', (error: Error) => {
+          reject(error);
+        });
+      });
+
+      return bufferPromise;
+    } catch (error) {
+      this.logger.error(
+        `[ImageService]: An error occurred while fetching image`,
+        {
+          error,
+        },
+      );
+      throw error;
+    }
   }
 }

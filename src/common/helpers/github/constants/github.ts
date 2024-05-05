@@ -16,10 +16,10 @@ export const installations = [
     active: false,
   },
   {
-    id: 2,
+    id: 50127144,
     owner: InstallationName.SUPERBRIDGEAPP,
     repo: 'token-lists',
     defaultBranch: 'main',
-    active: false,
+    active: true,
   },
 ];

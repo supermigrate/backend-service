@@ -29,7 +29,7 @@ export interface EthereumOptimism {
         decimals?: number;
       };
     };
-  }[];
+  };
 }
 
 export interface SuperBridgeApp {
@@ -39,8 +39,6 @@ export interface SuperBridgeApp {
   logoURI: string;
   opTokenId: string;
   addresses: {
-    [chainId: number]: {
-      address: string;
-    };
-  }[];
+    [chainId: number]: string;
+  };
 }

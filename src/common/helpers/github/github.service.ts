@@ -15,7 +15,8 @@ import {
   Migrate,
   PullRequest,
 } from '../../../modules/migration/interfaces/migration.interface';
-import { PrStatus } from '../../../modules/migration/enums/migration.enum';
+import { GithubAuth } from '../../../modules/user/interfaces/user.interface';
+import { PrStatus } from 'src/modules/migration/enums/migration.enum';
 
 @Injectable()
 export class GithubService {
@@ -49,6 +50,7 @@ export class GithubService {
       return {
         status: true,
         data: user.data,
+        auth: response.data as GithubAuth,
       };
     } catch (error) {
       return {
@@ -119,8 +121,8 @@ export class GithubService {
         return;
       }
 
-      await octokit.request(
-        'GET /repos/{owner}/{repo}/pulls/{pull_number}/merge',
+      const res = await octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
         {
           owner: installation.owner,
           repo: installation.repo,
@@ -128,9 +130,17 @@ export class GithubService {
         },
       );
 
+      let status = PrStatus.OPEN;
+
+      if (res.data.merged_at) {
+        status = PrStatus.MERGED;
+      } else if (res.data.closed_at) {
+        status = PrStatus.CLOSED;
+      }
+
       return {
         ...pullRequest,
-        status: PrStatus.MERGED,
+        status,
       };
     } catch (error) {
       return pullRequest;
@@ -272,6 +282,16 @@ export class GithubService {
     logoUrl: string,
   ) {
     if (name === InstallationName.ETHEREUM_OPTIMISM) {
+      const content: EthereumOptimism = {
+        name: data.name,
+        symbol: data.symbol,
+        decimals: data.decimals,
+        description: data.description,
+        website: data.website,
+        twitter: data.twitter,
+        tokens: {},
+      };
+
       const tokens = data.chains.map((chain) => {
         const token = {
           [chain.name]: {
@@ -283,15 +303,12 @@ export class GithubService {
         return token;
       });
 
-      const content: EthereumOptimism = {
-        name: data.name,
-        symbol: data.symbol,
-        decimals: data.decimals,
-        description: data.description,
-        website: data.website,
-        twitter: data.twitter,
-        tokens,
-      };
+      tokens.forEach((token) => {
+        content.tokens = {
+          ...content.tokens,
+          ...token,
+        };
+      });
 
       const res = await this.getFileSHA(
         octokit,
@@ -339,27 +356,31 @@ export class GithubService {
         decimals: data.decimals,
         logoURI: logoUrl,
         opTokenId: data.symbol,
-        addresses: [],
+        addresses: {},
       };
 
       const addresses = data.chains.map((chain) => {
         const token = {
-          [chain.id]: {
-            address: chain.token_address,
-          },
+          [chain.id]: chain.token_address,
         };
 
         if (chain.token_detail_override) {
           content = {
             ...content,
             ...chain.token_detail_override,
+            opTokenId: chain.token_detail_override.symbol ?? data.symbol,
           };
         }
 
         return token;
       });
 
-      content.addresses = addresses;
+      addresses.forEach((address) => {
+        content.addresses = {
+          ...content.addresses,
+          ...address,
+        };
+      });
 
       const res = await this.getFileSHA(
         octokit,
@@ -565,7 +586,7 @@ export class GithubService {
       return {
         id: response.data.number,
         url: response.data.html_url,
-        status: 'pending',
+        status: PrStatus.OPEN,
       };
     } catch (error) {
       return;

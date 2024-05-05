@@ -25,7 +25,7 @@ export class AuthService {
     try {
       const user = await this.githubService.getUserByAuthCode(code);
 
-      if (user.status === false) {
+      if (!user.data || user.status === false) {
         throw new ServiceError(
           'Invalid authentication code',
           HttpStatus.BAD_REQUEST,
@@ -33,20 +33,19 @@ export class AuthService {
       }
 
       const userExists = await this.userRepository.findOne({
-        where: { github_id: user?.data?.id },
+        where: { github_id: user.data.id },
       });
 
       if (userExists) {
         const { token, expire } = await this.generateToken(userExists.id);
 
-        if (userExists.ip_address !== ipAddress) {
-          await this.userRepository.update(
-            { id: userExists.id },
-            {
-              ip_address: ipAddress,
-            },
-          );
-        }
+        await this.userRepository.update(
+          { id: userExists.id },
+          {
+            github_auth: user.auth,
+            ip_address: ipAddress,
+          },
+        );
 
         return successResponse({
           status: true,
@@ -61,12 +60,13 @@ export class AuthService {
 
       const newUser = this.userRepository.create({
         id: uuidv4(),
-        github_id: user.data?.id,
-        name: user?.data?.name as string,
-        username: user?.data?.login,
-        avatar_url: user?.data?.avatar_url,
+        github_id: user.data.id,
+        name: user.data.name as string,
+        username: user.data.login,
+        avatar_url: user.data.avatar_url,
         ip_address: ipAddress,
-        metadata: user?.data,
+        github_auth: user.auth,
+        metadata: user.data,
       });
       await this.userRepository.save(newUser);
 

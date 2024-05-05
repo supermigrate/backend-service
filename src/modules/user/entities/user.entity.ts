@@ -8,6 +8,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { GithubAuth } from '../interfaces/user.interface';
 
 @Entity({
   name: 'users',
@@ -35,6 +36,10 @@ export class User {
 
   @Column()
   ip_address: string;
+
+  @Exclude()
+  @Column({ select: false })
+  github_auth: GithubAuth;
 
   @Exclude()
   @Column({ select: false })

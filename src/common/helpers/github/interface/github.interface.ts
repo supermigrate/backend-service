@@ -36,6 +36,9 @@ export interface SuperBridgeApp {
   name: string;
   symbol: string;
   decimals: number;
+  description?: string;
+  website?: string;
+  twitter?: string;
   logoURI: string;
   opTokenId: string;
   addresses: {

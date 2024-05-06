@@ -218,7 +218,7 @@ export class GithubService {
       owner,
       octokit,
       installation,
-      newBranchName,
+      baseBranchName,
       path,
       data,
       logoUrl,
@@ -290,7 +290,7 @@ export class GithubService {
       const content: EthereumOptimism = {
         name: data.name,
         symbol: data.symbol,
-        decimals: data.decimals,
+        decimals: Number(data.decimals),
         description: data.description,
         website: data.website,
         twitter: data.twitter,
@@ -331,7 +331,7 @@ export class GithubService {
         return dataContent;
       }
 
-      let currentData: EthereumOptimism = content;
+      let currentData = content;
 
       if (res?.content) {
         const contentDecoded = Buffer.from(res.content, 'base64').toString(
@@ -340,7 +340,7 @@ export class GithubService {
         currentData = JSON.parse(contentDecoded);
       }
 
-      const mergedContent = {
+      const mergedContent: EthereumOptimism = {
         ...currentData,
         ...content,
         tokens: {
@@ -358,7 +358,10 @@ export class GithubService {
       let content: SuperBridgeApp = {
         name: data.name,
         symbol: data.symbol,
-        decimals: data.decimals,
+        decimals: Number(data.decimals),
+        description: data.description,
+        website: data.website,
+        twitter: data.twitter,
         logoURI: logoUrl,
         opTokenId: data.symbol,
         addresses: {},
@@ -403,7 +406,7 @@ export class GithubService {
         return dataContent;
       }
 
-      let currentData: SuperBridgeApp = content;
+      let currentData = content;
 
       if (res?.content) {
         const contentDecoded = Buffer.from(res.content, 'base64').toString(
@@ -412,7 +415,7 @@ export class GithubService {
         currentData = JSON.parse(contentDecoded);
       }
 
-      const mergedContent = {
+      const mergedContent: SuperBridgeApp = {
         ...currentData,
         ...content,
         addresses: {

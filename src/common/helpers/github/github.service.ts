@@ -181,14 +181,19 @@ export class GithubService {
     const chainsLength = data.chains.length;
     const l2Chain = data.chains[chainsLength - 1];
 
+    const list =
+      installation.owner === InstallationName.ETHEREUM_OPTIMISM
+        ? 'superchain'
+        : 'superbridge';
+
     const owner = installation.owner;
     const repo = installation.repo;
     const path = `data/${data.symbol}/data.json`;
     const message = `${data.symbol} ${l2Chain.name} data.json`;
-    const newBranchName = `add-${data.symbol}-${l2Chain.name}`.toLowerCase();
+    const newBranchName = `add-${data.symbol}`.toLowerCase();
     const baseBranchName = installation.defaultBranch;
-    const title = `Add ${data.symbol} to ${l2Chain.name}`;
-    let body = `Adding ${data.symbol} to the superchain token list repo. Tagging @${username} for verification \n\n\n @${username}`;
+    const title = `Adding ${data.symbol} to ${list}`;
+    let body = `Adding ${data.symbol} to the ${list} token list repo. Tagging @${username} for verification`;
 
     const isBaseChain = data.chains.some((chain) =>
       chain.name.includes('base'),

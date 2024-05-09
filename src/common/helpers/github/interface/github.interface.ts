@@ -10,6 +10,7 @@ export interface Installation {
   owner: InstallationName;
   repo: string;
   defaultBranch: string;
+  category: string;
   active: boolean;
 }
 

@@ -1,5 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
-import { Repository } from 'typeorm';
+import { MongoRepository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,7 +13,7 @@ import { successResponse } from '../../common/responses/success.helper';
 export class AuthService {
   constructor(
     @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly userRepository: MongoRepository<User>,
     private readonly githubService: GithubService,
     private readonly jwtService: JwtService,
   ) {}
@@ -33,10 +33,12 @@ export class AuthService {
       }
 
       const userExists = await this.userRepository.findOne({
-        where: { github_id: user.data.id },
+        where: {
+          $or: [{ github_id: user.data.id }, { username: user.data.login }],
+        },
       });
 
-      if (userExists) {
+      if (userExists && userExists.avatar_url) {
         const { token, expire } = await this.generateToken(userExists.id);
 
         await this.userRepository.update(
@@ -54,6 +56,34 @@ export class AuthService {
             token,
             expire,
             user: userExists,
+          },
+        });
+      } else if (userExists && !userExists.avatar_url) {
+        await this.userRepository.update(
+          { id: userExists.id },
+          {
+            name: user.data.name as string,
+            avatar_url: user.data.avatar_url,
+            github_id: user.data.id,
+            github_auth: user.auth,
+            ip_address: ipAddress,
+            metadata: user.data as Record<string, any>,
+          },
+        );
+
+        const updatedUser = await this.userRepository.findOne({
+          where: { github_id: user.data.id },
+        });
+
+        const { token, expire } = await this.generateToken(userExists.id);
+
+        return successResponse({
+          status: true,
+          message: 'Authenticated successfully',
+          data: {
+            token,
+            expire,
+            user: updatedUser,
           },
         });
       }
@@ -82,6 +112,7 @@ export class AuthService {
         },
       });
     } catch (error) {
+      console.error(error);
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
       }

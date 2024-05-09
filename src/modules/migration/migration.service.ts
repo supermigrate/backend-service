@@ -278,6 +278,76 @@ export class MigrationService {
     }
   }
 
+  async addSuperbridge(
+    user: User,
+    id: string,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const migration = await this.migrationRepository.findOne({
+        where: {
+          id,
+        },
+      });
+
+      if (!migration) {
+        throw new ServiceError('Migration not found', HttpStatus.NOT_FOUND);
+      }
+
+      const migrate: Migrate = {
+        name: migration.name,
+        symbol: migration.symbol,
+        decimals: migration.decimals,
+        description: migration.description,
+        website: migration.website,
+        twitter: migration.twitter,
+        chains: migration.chains,
+        isSuperbridge: true,
+      };
+
+      const response = await this.githubService.migrateData(
+        migrate,
+        user.username,
+        migration.logo_url,
+      );
+
+      if (!response.status) {
+        throw new ServiceError('Migration failed', HttpStatus.BAD_REQUEST);
+      }
+
+      const mergePrs = [
+        ...migration.pull_requests,
+        ...(response.data as PullRequest[]),
+      ];
+
+      const uniqueMergedPrs = this.getUniqueArray(mergePrs) as PullRequest[];
+
+      migration.status = Status.PROCESSING;
+      migration.pull_requests = uniqueMergedPrs;
+      await this.migrationRepository.save(migration);
+
+      const updatedMigration = await this.migrationRepository.findOne({
+        where: {
+          id: migration.id,
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Migration added successful',
+        data: updatedMigration,
+      });
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'Error adding superbridge',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
   async getAll(user: User): Promise<IResponse | ServiceError> {
     try {
       const migrations = await this.migrationRepository.find({
@@ -434,6 +504,10 @@ export class MigrationService {
 
   private async fetchImageAsStream(imageUrl: string): Promise<Buffer> {
     try {
+      if (!imageUrl) {
+        return Buffer.from('');
+      }
+
       const response = await this.httpService.axiosRef.get(imageUrl, {
         responseType: 'stream',
       });

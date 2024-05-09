@@ -32,4 +32,5 @@ export interface Migrate {
   website: string;
   twitter: string;
   chains: Chain[];
+  isSuperbridge?: boolean;
 }

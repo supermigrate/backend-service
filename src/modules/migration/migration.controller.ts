@@ -85,6 +85,21 @@ export class MigrationController {
 
   @ApiResponse({
     status: HttpStatus.OK,
+    description: 'Migration added successful',
+    type: MigrationResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Migration failed',
+    type: ErrorResponse,
+  })
+  @Post('/:id/superbridge')
+  async addSuperbridge(@Req() req: AuthRequest, @Param('id') id: string) {
+    return await this.migrationService.addSuperbridge(req.user, id);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
     description: 'Migrations fetched',
     type: MigrationsResponse,
   })

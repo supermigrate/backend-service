@@ -67,8 +67,17 @@ export class GithubService {
     file?: Express.Multer.File,
   ) {
     try {
+      let formattedInstallations = installations;
+
+      if (data.isSuperbridge) {
+        formattedInstallations = installations.filter(
+          (installation) =>
+            installation.owner === InstallationName.IAMNOTSTATIC,
+        );
+      }
+
       const results = await this.processInstallations(
-        installations,
+        formattedInstallations,
         data,
         username,
         logoUrl,
@@ -78,7 +87,7 @@ export class GithubService {
       const filteredResults = results.filter((result) => result !== undefined);
       return {
         status: true,
-        data: filteredResults as PullRequest[],
+        data: filteredResults as PullRequest[] | [],
       };
     } catch (error) {
       return {

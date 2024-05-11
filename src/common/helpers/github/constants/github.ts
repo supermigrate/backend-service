@@ -7,7 +7,7 @@ export const installations = [
     repo: 'base-migrate-test',
     defaultBranch: 'main',
     category: 'test',
-    active: true,
+    active: false,
   },
   {
     id: 1,
@@ -23,6 +23,6 @@ export const installations = [
     repo: 'token-lists',
     category: 'superbridge',
     defaultBranch: 'main',
-    active: false,
+    active: true,
   },
 ];

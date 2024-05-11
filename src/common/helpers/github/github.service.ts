@@ -72,7 +72,7 @@ export class GithubService {
       if (data.isSuperbridge) {
         formattedInstallations = installations.filter(
           (installation) =>
-            installation.owner === InstallationName.IAMNOTSTATIC,
+            installation.owner === InstallationName.SUPERBRIDGEAPP,
         );
       }
 

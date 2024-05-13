@@ -93,9 +93,26 @@ export class MigrationController {
     description: 'Migration failed',
     type: ErrorResponse,
   })
+  @UseInterceptors(FileInterceptor('logo'))
   @Post('/:id/superbridge')
-  async addSuperbridge(@Req() req: AuthRequest, @Param('id') id: string) {
-    return await this.migrationService.addSuperbridge(req.user, id);
+  async addSuperbridge(
+    @Req() req: AuthRequest,
+    @Param('id') id: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: env.file.maxSize * 1000 * 1024,
+          }),
+          new CustomUploadFileTypeValidator({
+            fileType: env.file.allowedMimes,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return await this.migrationService.addSuperbridge(req.user, id, file);
   }
 
   @ApiResponse({

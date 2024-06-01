@@ -180,6 +180,7 @@ export class EarnService {
       });
 
       const referralPoints = await this.getTotalReferralPoints(user.id);
+      const totalPoints = await this.getTotalPointsInCirculation();
 
       const userRank = await this.getUserRankById(user.id);
 
@@ -193,6 +194,7 @@ export class EarnService {
             points: referralPoints,
           },
           rank: userRank,
+          total_circulation_points: totalPoints,
         },
       });
     } catch (error) {
@@ -328,6 +330,31 @@ export class EarnService {
 
     if (referralPoints.length > 0) {
       return referralPoints[0].totalPoints;
+    } else {
+      return 0;
+    }
+  }
+
+  async getTotalPointsInCirculation() {
+    const totalPoints = await this.transactionRepository
+      .aggregate([
+        {
+          $match: {
+            type: TransactionType.EARN,
+            status: TransactionStatus.SUCCESS,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalPoints: { $sum: '$points' },
+          },
+        },
+      ])
+      .toArray();
+
+    if (totalPoints.length > 0) {
+      return totalPoints[0].totalPoints;
     } else {
       return 0;
     }

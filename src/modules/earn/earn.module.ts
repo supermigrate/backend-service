@@ -7,6 +7,7 @@ import { Referral } from './entities/referral.entity';
 import { Multiplier } from './entities/multiplier.entity';
 import { User } from '../user/entities/user.entity';
 import { Transaction } from './entities/transaction.entity';
+import { ContractModule } from '../../common/helpers/contract/contract.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { Transaction } from './entities/transaction.entity';
       Transaction,
       Multiplier,
     ]),
+    ContractModule,
   ],
   exports: [EarnService],
   providers: [EarnService],

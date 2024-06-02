@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { Activity } from './entities/activity.entity';
@@ -18,6 +18,7 @@ import { IResponse } from '../../common/interfaces/response.interface';
 import { ServiceError } from '../../common/errors/service.error';
 import { generateCode } from '../../common/utils';
 import { successResponse } from '../../common/responses/success.helper';
+import { ContractService } from '../../common/helpers/contract/contract.service';
 
 @Injectable()
 export class EarnService {
@@ -32,9 +33,8 @@ export class EarnService {
     private readonly transactionRepository: MongoRepository<Transaction>,
     @InjectRepository(Multiplier)
     private readonly multiplierRepository: MongoRepository<Multiplier>,
+    private readonly contractService: ContractService,
   ) {}
-
-  private readonly logger = new Logger(EarnService.name);
 
   async register(
     body: RegisterDto,
@@ -254,6 +254,84 @@ export class EarnService {
 
       throw new ServiceError(
         'Error getting activities',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async claimNFTEarnings(address: string): Promise<IResponse | ServiceError> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: {
+          connected_addressess: address,
+        },
+      });
+
+      if (!user) {
+        throw new ServiceError('User not found', HttpStatus.NOT_FOUND);
+      }
+
+      const balance = await this.contractService.getBalance(address);
+      if (balance === 0) {
+        throw new ServiceError(
+          'Not eligible for NFT earnings, please mint NFT first',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const activity = await this.activityRepository.findOne({
+        where: {
+          slug: ActivitySlug.NFT,
+        },
+      });
+
+      if (!activity) {
+        throw new ServiceError('Activity not found', HttpStatus.NOT_FOUND);
+      }
+
+      const transaction = await this.transactionRepository.findOne({
+        where: {
+          user_id: user.id,
+          activity_id: activity.id,
+        },
+      });
+
+      if (transaction) {
+        throw new ServiceError(
+          'NFT earnings already claimed',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      await this.transactionRepository.save({
+        id: uuidv4(),
+        user_id: user.id,
+        activity_id: activity.id,
+        activity_slug: activity.slug,
+        points: activity.points_value,
+        description: 'NFT earnings',
+        status: TransactionStatus.SUCCESS,
+        type: TransactionType.EARN,
+      });
+
+      await this.userRepository.update(
+        { id: user.id },
+        {
+          points_balance: user.points_balance + activity.points_value,
+        },
+      );
+
+      return successResponse({
+        status: true,
+        message: 'Successfully claimed NFT earnings',
+      });
+    } catch (error) {
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'Error claiming NFT earnings',
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
     }

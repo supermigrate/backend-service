@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Req,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -14,9 +15,11 @@ import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { EarnService } from './earn.service';
 import { ErrorResponse } from 'src/common/responses';
 import { RegisterDto } from './dtos/earn.dto';
+import { SanitizerGuard } from '../../common/guards/sanitizer.guard';
 
 @ApiTags('Earns')
 @UseInterceptors(ClassSerializerInterceptor)
+@UseGuards(SanitizerGuard)
 @Controller('earns')
 export class EarnController {
   constructor(private readonly earnService: EarnService) {}
@@ -63,6 +66,20 @@ export class EarnController {
   @Get('activities')
   getActivities() {
     return this.earnService.getActivities();
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Claim NFT earnings successful',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'Error claiming NFT earnings',
+    type: ErrorResponse,
+  })
+  @Post('nft/claim/:address')
+  async claimNFTEarnings(@Param('address') address: string) {
+    return this.earnService.claimNFTEarnings(address);
   }
 
   @ApiResponse({

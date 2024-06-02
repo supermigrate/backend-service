@@ -41,6 +41,7 @@
     "compression": "^1.7.4",
     "dotenv": "^16.4.5",
     "env-var": "^7.4.1",
+    "ethers": "^6.12.2",
     "file-type-mime": "^0.3.10",
     "helmet": "^7.1.0",
     "mongodb": "^6.5.0",

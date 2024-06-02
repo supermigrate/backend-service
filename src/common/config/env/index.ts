@@ -49,4 +49,13 @@ export const env = {
     apiKey: envVar.get('CLOUDINARY_API_KEY').required().asString(),
     apiSecret: envVar.get('CLOUDINARY_API_SECRET').required().asString(),
   },
+  blockchain: {
+    rpcUrl: envVar.get('BLOCKCHAIN_RPC_URL').required().asString(),
+  },
+  contract: {
+    nftAddress: envVar.get('NFT_CONTRACT_ADDRESS').required().asString(),
+  },
+  client: {
+    origin: envVar.get('CLIENT_ORIGIN').required().asString(),
+  },
 };

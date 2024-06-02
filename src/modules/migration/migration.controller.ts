@@ -85,6 +85,38 @@ export class MigrationController {
 
   @ApiResponse({
     status: HttpStatus.OK,
+    description: 'Migration added successful',
+    type: MigrationResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.BAD_REQUEST,
+    description: 'Migration failed',
+    type: ErrorResponse,
+  })
+  @UseInterceptors(FileInterceptor('logo'))
+  @Post('/:id/superbridge')
+  async addSuperbridge(
+    @Req() req: AuthRequest,
+    @Param('id') id: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: env.file.maxSize * 1000 * 1024,
+          }),
+          new CustomUploadFileTypeValidator({
+            fileType: env.file.allowedMimes,
+          }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return await this.migrationService.addSuperbridge(req.user, id, file);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
     description: 'Migrations fetched',
     type: MigrationsResponse,
   })

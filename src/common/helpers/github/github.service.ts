@@ -15,7 +15,8 @@ import {
   Migrate,
   PullRequest,
 } from '../../../modules/migration/interfaces/migration.interface';
-import { PrStatus } from '../../../modules/migration/enums/migration.enum';
+import { GithubAuth } from '../../../modules/user/interfaces/user.interface';
+import { PrStatus } from 'src/modules/migration/enums/migration.enum';
 
 @Injectable()
 export class GithubService {
@@ -49,6 +50,7 @@ export class GithubService {
       return {
         status: true,
         data: user.data,
+        auth: response.data as GithubAuth,
       };
     } catch (error) {
       return {
@@ -65,8 +67,17 @@ export class GithubService {
     file?: Express.Multer.File,
   ) {
     try {
+      let formattedInstallations = installations;
+
+      if (data.isSuperbridge) {
+        formattedInstallations = installations.filter(
+          (installation) =>
+            installation.owner === InstallationName.SUPERBRIDGEAPP,
+        );
+      }
+
       const results = await this.processInstallations(
-        installations,
+        formattedInstallations,
         data,
         username,
         logoUrl,
@@ -76,7 +87,7 @@ export class GithubService {
       const filteredResults = results.filter((result) => result !== undefined);
       return {
         status: true,
-        data: filteredResults as PullRequest[],
+        data: filteredResults as PullRequest[] | [],
       };
     } catch (error) {
       return {
@@ -119,8 +130,8 @@ export class GithubService {
         return;
       }
 
-      await octokit.request(
-        'GET /repos/{owner}/{repo}/pulls/{pull_number}/merge',
+      const res = await octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
         {
           owner: installation.owner,
           repo: installation.repo,
@@ -128,9 +139,17 @@ export class GithubService {
         },
       );
 
+      let status = PrStatus.OPEN;
+
+      if (res.data.merged_at) {
+        status = PrStatus.MERGED;
+      } else if (res.data.closed_at) {
+        status = PrStatus.CLOSED;
+      }
+
       return {
         ...pullRequest,
-        status: PrStatus.MERGED,
+        status,
       };
     } catch (error) {
       return pullRequest;
@@ -174,11 +193,11 @@ export class GithubService {
     const owner = installation.owner;
     const repo = installation.repo;
     const path = `data/${data.symbol}/data.json`;
-    const message = `add ${data.symbol} ${l2Chain.name} data.json`;
-    const newBranchName = `add-${data.symbol}-${l2Chain.name}`.toLowerCase();
+    const message = `${data.symbol} ${l2Chain.name} data.json`;
+    const newBranchName = `add-${data.symbol}`.toLowerCase();
     const baseBranchName = installation.defaultBranch;
-    const title = `Add ${data.symbol} to ${l2Chain.name}`;
-    let body = `Adding ${data.symbol} to the superchain token list repo. Tagging @${username} for verification \n\n\n @${username}`;
+    const title = `Add ${data.symbol} to ${installation.category}`;
+    let body = `Adding ${data.symbol} to ${installation.category} token list repo. Tagging @${username} for verification`;
 
     const isBaseChain = data.chains.some((chain) =>
       chain.name.includes('base'),
@@ -255,6 +274,8 @@ export class GithubService {
 
     return {
       ...response,
+      repo: installation.repo,
+      owner: installation.owner,
       chain: l2Chain.name,
       installation_id: installation.id,
     };
@@ -270,141 +291,253 @@ export class GithubService {
     logoUrl: string,
   ) {
     if (name === InstallationName.ETHEREUM_OPTIMISM) {
-      const tokens = data.chains.map((chain) => {
-        const token = {
-          [chain.name]: {
-            address: chain.token_address,
-            overrides: chain.token_detail_override || undefined,
-          },
-        };
-
-        return token;
-      });
-
-      const content: EthereumOptimism = {
-        name: data.name,
-        symbol: data.symbol,
-        decimals: data.decimals,
-        description: data.description,
-        website: data.website,
-        twitter: data.twitter,
-        tokens,
-      };
-
-      const res = await this.getFileSHA(
+      const content = await this.getSuperchainContent(
         octokit,
-        installation.owner,
-        installation.repo,
+        installation,
         branch,
         path,
+        data,
       );
 
-      if (!res) {
-        const dataContent = Buffer.from(
-          JSON.stringify(content, null, 2),
-        ).toString('base64');
-
-        return dataContent;
-      }
-
-      let currentData: EthereumOptimism = content;
-
-      if (res?.content) {
-        const contentDecoded = Buffer.from(res.content, 'base64').toString(
-          'utf8',
-        );
-        currentData = JSON.parse(contentDecoded);
-      }
-
-      const mergedContent = {
-        ...currentData,
-        ...content,
-        tokens: {
-          ...currentData.tokens,
-          ...content.tokens,
-        },
-      };
-
-      const updatedContentBase64 = Buffer.from(
-        JSON.stringify(mergedContent, null, 2),
+      const contentBase64 = Buffer.from(
+        JSON.stringify(content, null, 2),
       ).toString('base64');
 
-      return updatedContentBase64;
+      return contentBase64;
     } else if (name === InstallationName.SUPERBRIDGEAPP) {
-      let content: SuperBridgeApp = {
-        name: data.name,
-        symbol: data.symbol,
-        decimals: data.decimals,
-        logoURI: logoUrl,
-        opTokenId: data.symbol,
-        addresses: [],
-      };
-
-      const addresses = data.chains.map((chain) => {
-        const token = {
-          [chain.id]: {
-            address: chain.token_address,
-          },
-        };
-
-        if (chain.token_detail_override) {
-          content = {
-            ...content,
-            ...chain.token_detail_override,
-          };
-        }
-
-        return token;
-      });
-
-      content.addresses = addresses;
-
-      const res = await this.getFileSHA(
+      const content = await this.getSuperbridgeAppContent(
         octokit,
-        installation.owner,
-        installation.repo,
+        installation,
         branch,
         path,
+        data,
+        logoUrl,
       );
 
-      if (!res) {
-        const dataContent = Buffer.from(
-          JSON.stringify(content, null, 2),
-        ).toString('base64');
-
-        return dataContent;
-      }
-
-      let currentData: SuperBridgeApp = content;
-
-      if (res?.content) {
-        const contentDecoded = Buffer.from(res.content, 'base64').toString(
-          'utf8',
-        );
-        currentData = JSON.parse(contentDecoded);
-      }
-
-      const mergedContent = {
-        ...currentData,
-        ...content,
-        addresses: {
-          ...currentData.addresses,
-          ...content.addresses,
-        },
-      };
-
-      const updatedContentBase64 = Buffer.from(
-        JSON.stringify(mergedContent, null, 2),
+      const contentBase64 = Buffer.from(
+        JSON.stringify(content, null, 2),
       ).toString('base64');
 
-      return updatedContentBase64;
+      return contentBase64;
     } else {
-      const contentBase64 = Buffer.from(JSON.stringify(data, null, 2)).toString(
-        'base64',
+      const superbridgeAppContent = await this.getSuperbridgeAppContent(
+        octokit,
+        installation,
+        branch,
+        path,
+        data,
+        logoUrl,
       );
+
+      const superchainContent = await this.getSuperchainContent(
+        octokit,
+        installation,
+        branch,
+        path,
+        data,
+      );
+
+      const content = {
+        superchain: superchainContent,
+        superbridge: superbridgeAppContent,
+      };
+
+      const contentBase64 = Buffer.from(
+        JSON.stringify(content, null, 2),
+      ).toString('base64');
 
       return contentBase64;
     }
+  }
+
+  private async getSuperbridgeAppContent(
+    octokit: Octokit,
+    installation: Installation,
+    branch: string,
+    path: string,
+    data: Migrate,
+    logoUrl: string,
+  ) {
+    let content: SuperBridgeApp = {
+      name: data.name,
+      symbol: data.symbol,
+      decimals: Number(data.decimals),
+      description: data.description,
+      website: data.website,
+      twitter: data.twitter,
+      logoURI: logoUrl,
+      opTokenId: data.symbol,
+      addresses: {},
+    };
+
+    const addresses = data.chains.map((chain) => {
+      const token = {
+        [chain.id]: chain.token_address,
+      };
+
+      if (chain.token_detail_override) {
+        content = {
+          ...content,
+          ...chain.token_detail_override,
+          opTokenId: chain.token_detail_override.symbol ?? data.symbol,
+        };
+      }
+
+      return token;
+    });
+
+    addresses.forEach((address) => {
+      content.addresses = {
+        ...content.addresses,
+        ...address,
+      };
+    });
+
+    const defaultBranchRes = await this.getFileSHA(
+      octokit,
+      installation.owner,
+      installation.repo,
+      installation.defaultBranch,
+      path,
+    );
+
+    const newBranchRes = await this.getFileSHA(
+      octokit,
+      installation.owner,
+      installation.repo,
+      branch,
+      path,
+    );
+
+    if (!defaultBranchRes && !newBranchRes) {
+      return content;
+    }
+
+    let currentData = content;
+
+    if (defaultBranchRes?.content) {
+      const contentDecoded = Buffer.from(
+        defaultBranchRes.content,
+        'base64',
+      ).toString('utf8');
+
+      const parsedSurrentData = JSON.parse(contentDecoded);
+
+      currentData = parsedSurrentData.superbridge ?? parsedSurrentData;
+    }
+
+    if (newBranchRes?.content) {
+      const contentDecoded = Buffer.from(
+        newBranchRes.content,
+        'base64',
+      ).toString('utf8');
+
+      const parsedSurrentData = JSON.parse(contentDecoded);
+
+      currentData = parsedSurrentData.superbridge ?? parsedSurrentData;
+    }
+
+    const mergedContent: SuperBridgeApp = {
+      ...currentData,
+      ...content,
+      addresses: {
+        ...currentData.addresses,
+        ...content.addresses,
+      },
+    };
+
+    return mergedContent;
+  }
+
+  private async getSuperchainContent(
+    octokit: Octokit,
+    installation: Installation,
+    branch: string,
+    path: string,
+    data: Migrate,
+  ) {
+    const content: EthereumOptimism = {
+      name: data.name,
+      symbol: data.symbol,
+      decimals: Number(data.decimals),
+      description: data.description,
+      website: data.website,
+      twitter: data.twitter,
+      tokens: {},
+    };
+
+    const tokens = data.chains.map((chain) => {
+      const token = {
+        [chain.name]: {
+          address: chain.token_address,
+          overrides: chain.token_detail_override || undefined,
+        },
+      };
+
+      return token;
+    });
+
+    tokens.forEach((token) => {
+      content.tokens = {
+        ...content.tokens,
+        ...token,
+      };
+    });
+
+    const defaultBranchRes = await this.getFileSHA(
+      octokit,
+      installation.owner,
+      installation.repo,
+      installation.defaultBranch,
+      path,
+    );
+
+    const newBranchRes = await this.getFileSHA(
+      octokit,
+      installation.owner,
+      installation.repo,
+      branch,
+      path,
+    );
+
+    if (!defaultBranchRes && !newBranchRes) {
+      return content;
+    }
+
+    let currentData = content;
+
+    if (defaultBranchRes?.content) {
+      const contentDecoded = Buffer.from(
+        defaultBranchRes.content,
+        'base64',
+      ).toString('utf8');
+
+      const parsedCurrentData = JSON.parse(contentDecoded);
+
+      currentData = parsedCurrentData.superchain ?? parsedCurrentData;
+    }
+
+    if (newBranchRes?.content) {
+      const contentDecoded = Buffer.from(
+        newBranchRes.content,
+        'base64',
+      ).toString('utf8');
+
+      const parsedCurrentData = JSON.parse(contentDecoded);
+
+      currentData = parsedCurrentData.superchain ?? parsedCurrentData;
+    }
+
+    const mergedContent: EthereumOptimism = {
+      ...currentData,
+      ...content,
+      tokens: {
+        ...currentData.tokens,
+        ...content.tokens,
+      },
+    };
+
+    return mergedContent;
   }
 
   private async getInstallationInstance(
@@ -563,7 +696,7 @@ export class GithubService {
       return {
         id: response.data.number,
         url: response.data.html_url,
-        status: 'pending',
+        status: PrStatus.OPEN,
       };
     } catch (error) {
       return;

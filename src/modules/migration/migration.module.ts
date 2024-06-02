@@ -7,6 +7,7 @@ import { User } from '../user/entities/user.entity';
 import { JwtModule } from '@nestjs/jwt';
 import { GithubModule } from '../../common/helpers/github/github.module';
 import { Migration } from './entities/migration.entity';
+import { HttpModule } from '@nestjs/axios';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { Migration } from './entities/migration.entity';
     CloudinaryModule,
     JwtModule,
     GithubModule,
+    HttpModule,
   ],
   providers: [MigrationService],
   controllers: [MigrationController],

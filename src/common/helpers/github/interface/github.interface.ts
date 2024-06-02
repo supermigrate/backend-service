@@ -10,6 +10,7 @@ export interface Installation {
   owner: InstallationName;
   repo: string;
   defaultBranch: string;
+  category: string;
   active: boolean;
 }
 
@@ -29,18 +30,19 @@ export interface EthereumOptimism {
         decimals?: number;
       };
     };
-  }[];
+  };
 }
 
 export interface SuperBridgeApp {
   name: string;
   symbol: string;
   decimals: number;
+  description?: string;
+  website?: string;
+  twitter?: string;
   logoURI: string;
   opTokenId: string;
   addresses: {
-    [chainId: number]: {
-      address: string;
-    };
-  }[];
+    [chainId: number]: string;
+  };
 }

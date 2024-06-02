@@ -8,6 +8,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { GithubAuth } from '../interfaces/user.interface';
 
 @Entity({
   name: 'users',
@@ -36,9 +37,24 @@ export class User {
   @Column()
   ip_address: string;
 
+  @Column({ default: 0 })
+  points_balance: number;
+
+  @Column()
+  referral_code: string;
+
+  @Column()
+  connected_addressess: string[];
+
+  @Exclude()
+  @Column({ select: false })
+  github_auth: GithubAuth;
+
   @Exclude()
   @Column({ select: false })
   metadata: Record<string, any>;
+
+  rank: number;
 
   @CreateDateColumn()
   created_at: Date;

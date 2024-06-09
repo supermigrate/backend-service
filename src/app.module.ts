@@ -19,6 +19,7 @@ import { CloudinaryModule } from './common/helpers/cloudinary/cloudinary.module'
 import { LiquidityModule } from './modules/liquidity/liquidity.module';
 import { EarnModule } from './modules/earn/earn.module';
 import { ContractModule } from './common/helpers/contract/contract.module';
+import { LaunchboxModule } from './modules/launchbox/launchbox.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -46,6 +47,7 @@ const envPath = getEnvPath();
     LiquidityModule,
     EarnModule,
     ContractModule,
+    LaunchboxModule,
   ],
   controllers: [AppController],
   providers: [

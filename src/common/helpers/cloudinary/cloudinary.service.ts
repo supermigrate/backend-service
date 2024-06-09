@@ -11,23 +11,23 @@ v2.config({
 
 @Injectable()
 export class CloudinaryService {
-  public async upload(file: Express.Multer.File): Promise<string> {
+  public async upload(
+    file: Express.Multer.File,
+    folder = 'migrations',
+  ): Promise<string> {
     return new Promise((resolve, reject) => {
       v2.uploader
-        .upload_stream(
-          { resource_type: 'image', folder: 'migrations' },
-          (error, result) => {
-            if (error) {
-              reject(error);
-            }
+        .upload_stream({ resource_type: 'image', folder }, (error, result) => {
+          if (error) {
+            reject(error);
+          }
 
-            if (result && result.url) {
-              resolve(result.secure_url);
-            } else {
-              reject('Upload failed');
-            }
-          },
-        )
+          if (result && result.url) {
+            resolve(result.secure_url);
+          } else {
+            reject('Upload failed');
+          }
+        })
         .end(file.buffer);
     });
   }

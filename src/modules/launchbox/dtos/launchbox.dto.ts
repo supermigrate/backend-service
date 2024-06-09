@@ -68,6 +68,6 @@ export class ChainDto {
   deployer_address: string;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   transaction_hash: string;
 }

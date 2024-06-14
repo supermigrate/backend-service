@@ -74,10 +74,10 @@ export class ChainDto {
 
 export class PaginateDto {
   @IsOptional()
-  @IsNumber()
-  take = 50;
+  @IsString()
+  take = '50';
 
   @IsOptional()
-  @IsNumber()
-  skip = 0;
+  @IsString()
+  skip = '0';
 }

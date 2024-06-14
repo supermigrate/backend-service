@@ -8,6 +8,7 @@ import {
   Param,
   ParseFilePipe,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -15,7 +16,7 @@ import { LaunchboxService } from './launchbox.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
 import { env } from '../../common/config/env';
-import { CreateDto } from './dtos/launchbox.dto';
+import { CreateDto, PaginateDto } from './dtos/launchbox.dto';
 import { FileMimes } from '../../common/enums/index.enum';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/responses';
@@ -77,8 +78,8 @@ export class LaunchboxController {
     type: ErrorResponse,
   })
   @Get('/tokens')
-  async findAll() {
-    return this.launchboxService.findAll();
+  async findAll(@Query() query: PaginateDto) {
+    return this.launchboxService.findAll(query);
   }
 
   @ApiResponse({
@@ -96,8 +97,8 @@ export class LaunchboxController {
     description: 'Token not found',
     type: ErrorResponse,
   })
-  @Get('/tokens/:id')
-  async findOne(@Param('id') id: string) {
-    return this.launchboxService.findOne(id);
+  @Get('/tokens/:reference')
+  async findOne(@Param('reference') reference: string) {
+    return this.launchboxService.findOne(reference);
   }
 }

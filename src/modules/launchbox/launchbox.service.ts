@@ -2,15 +2,16 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { LaunchboxToken } from './entities/launchbox.entity';
 import { MongoRepository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ChainDto, CreateDto } from './dtos/launchbox.dto';
+import { ChainDto, CreateDto, PaginateDto } from './dtos/launchbox.dto';
 import { ServiceError } from '../../common/errors/service.error';
 import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
-import { IResponse } from 'src/common/interfaces/response.interface';
-import { successResponse } from 'src/common/responses/success.helper';
+import { IResponse } from '../../common/interfaces/response.interface';
+import { successResponse } from '../../common/responses/success.helper';
 import { Chain } from './interfaces/launchbox.interface';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { v4 as uuidv4 } from 'uuid';
+import validator from 'validator';
 
 @Injectable()
 export class LaunchboxService {
@@ -86,17 +87,32 @@ export class LaunchboxService {
     }
   }
 
-  async findAll(): Promise<IResponse | ServiceError> {
+  async findAll(query: PaginateDto): Promise<IResponse | ServiceError> {
     try {
-      const launchboxes = await this.launchboxTokenRepository.find();
+      const totalTokens = await this.launchboxTokenRepository.count();
+
+      const launchboxTokens = await this.launchboxTokenRepository.find({
+        where: {
+          is_active: true,
+        },
+        skip: query.skip,
+        take: query.take,
+      });
 
       return successResponse({
         status: true,
         message: 'Tokens fetched successfully',
-        data: launchboxes,
+        data: launchboxTokens,
+        meta: {
+          ...query,
+          totalTokens,
+        },
       });
     } catch (error) {
-      this.logger.error('An error occurred while fetching the tokens.', error);
+      this.logger.error(
+        'An error occurred while fetching the tokens.',
+        error.stack,
+      );
 
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
@@ -109,12 +125,11 @@ export class LaunchboxService {
     }
   }
 
-  async findOne(id: string): Promise<IResponse | ServiceError> {
+  async findOne(reference: string): Promise<IResponse | ServiceError> {
     try {
+      const isUuid = validator.isUUID(reference);
       const launchbox = await this.launchboxTokenRepository.findOne({
-        where: {
-          id,
-        },
+        where: isUuid ? { id: reference } : { token_address: reference },
       });
 
       if (!launchbox) {

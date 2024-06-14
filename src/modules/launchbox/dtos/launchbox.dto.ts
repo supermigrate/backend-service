@@ -71,3 +71,13 @@ export class ChainDto {
   @IsNotEmpty()
   transaction_hash: string;
 }
+
+export class PaginateDto {
+  @IsOptional()
+  @IsNumber()
+  take = 50;
+
+  @IsOptional()
+  @IsNumber()
+  skip = 0;
+}

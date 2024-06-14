@@ -95,8 +95,8 @@ export class LaunchboxService {
         where: {
           is_active: true,
         },
-        skip: query.skip,
-        take: query.take,
+        skip: Number(query.skip),
+        take: Number(query.take),
       });
 
       return successResponse({
@@ -104,7 +104,8 @@ export class LaunchboxService {
         message: 'Tokens fetched successfully',
         data: launchboxTokens,
         meta: {
-          ...query,
+          take: Number(query.take),
+          skip: Number(query.skip),
           totalTokens,
         },
       });

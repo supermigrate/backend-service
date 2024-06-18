@@ -1,5 +1,5 @@
-import * as envVar from 'env-var';
 import { config } from 'dotenv';
+import * as envVar from 'env-var';
 import { getEnvPath } from '../../utils/';
 
 const envPath = getEnvPath();
@@ -57,5 +57,8 @@ export const env = {
   },
   client: {
     origin: envVar.get('CLIENT_ORIGIN').required().asString(),
+  },
+  airstack: {
+    key: envVar.get('AIRSTACK_KEY').required().asString(),
   },
 };

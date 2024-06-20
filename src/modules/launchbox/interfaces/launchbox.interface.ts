@@ -4,3 +4,13 @@ export interface Chain {
   deployer_address: string;
   transaction_hash: string;
 }
+
+export interface Social {
+  [key: string]: {
+    channel: {
+      channel_id: string;
+      name: string;
+      url: string;
+    };
+  };
+}

@@ -101,4 +101,60 @@ export class LaunchboxController {
   async findOne(@Param('reference') reference: string) {
     return this.launchboxService.findOne(reference);
   }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token holders fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token holders. Please try again later.',
+    type: ErrorResponse,
+  })
+  @Get('/tokens/:id/holders')
+  async getTokenHolders(@Query() query: PaginateDto, @Param('id') id: string) {
+    return this.launchboxService.getTokenHolders(query, id);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get farcaster channels by address',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the channels',
+    type: ErrorResponse,
+  })
+  @Get('/channels/:address')
+  async getChannelsByAddress(@Param('address') address: string) {
+    return this.launchboxService.getChannelsByAddress(address);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get current coin price in USD',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the price',
+    type: ErrorResponse,
+  })
+  @Get('/price')
+  async getPrice(@Query() query: { coin: string; currency: string }) {
+    query.currency = query.currency || 'usd';
+    query.coin = query.coin || 'ethereum';
+
+    return this.launchboxService.getCoinPrice(query);
+  }
+
+  @Get('tokens/holders/seed')
+  async seedHolders() {
+    return this.launchboxService.seedTokenHolders();
+  }
 }

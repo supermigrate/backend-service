@@ -8,7 +8,7 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Chain } from '../interfaces/launchbox.interface';
+import { Chain, Social } from '../interfaces/launchbox.interface';
 
 @Entity({
   name: 'launchbox_tokens',
@@ -34,6 +34,9 @@ export class LaunchboxToken {
   token_address: string;
 
   @Column()
+  exchange_address: string;
+
+  @Column()
   token_total_supply: number;
 
   @Column()
@@ -52,12 +55,42 @@ export class LaunchboxToken {
   chain: Chain;
 
   @Column()
+  socials: Social;
+
+  @Column()
   is_active: boolean;
 
   @Column()
   configurations: {
     [key: string]: any;
   };
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+}
+
+@Entity({
+  name: 'launchbox_token_holders',
+})
+export class LaunchboxTokenHolder {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  address: string;
+
+  @Column()
+  balance: string;
+
+  @Column()
+  token_id: string;
 
   @CreateDateColumn()
   created_at: Date;

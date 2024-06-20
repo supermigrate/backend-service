@@ -58,4 +58,11 @@ export const env = {
   client: {
     origin: envVar.get('CLIENT_ORIGIN').required().asString(),
   },
+  airstack: {
+    env: envVar.get('AIRSTACK_ENV').required().asString(),
+    key: envVar.get('AIRSTACK_KEY').required().asString(),
+  },
+  coingecko: {
+    url: envVar.get('COINGECKO_URL').required().asString(),
+  },
 };

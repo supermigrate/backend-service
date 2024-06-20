@@ -20,6 +20,7 @@ import { LiquidityModule } from './modules/liquidity/liquidity.module';
 import { EarnModule } from './modules/earn/earn.module';
 import { ContractModule } from './common/helpers/contract/contract.module';
 import { LaunchboxModule } from './modules/launchbox/launchbox.module';
+import { FarcasterModule } from './common/helpers/farcaster/farcaster.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -48,6 +49,7 @@ const envPath = getEnvPath();
     EarnModule,
     ContractModule,
     LaunchboxModule,
+    FarcasterModule,
   ],
   controllers: [AppController],
   providers: [

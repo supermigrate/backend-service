@@ -29,6 +29,11 @@ export class CreateDto {
   token_address: string;
 
   @IsNotEmpty()
+  @IsEthereumAddress()
+  @Transform(({ value }) => value.trim())
+  exchange_address: string;
+
+  @IsNotEmpty()
   @IsString()
   token_total_supply: string;
 
@@ -38,10 +43,8 @@ export class CreateDto {
   create_token_page: string;
 
   @IsOptional()
-  @IsUrl({
-    require_protocol: true,
-  })
-  warpcast_channel_link: string;
+  @IsString()
+  socials: string;
 
   @IsOptional()
   @IsUrl({
@@ -72,6 +75,22 @@ export class ChainDto {
   transaction_hash: string;
 }
 
+export class SocialDto {
+  @IsNotEmpty()
+  @IsString()
+  channel_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @IsNotEmpty()
+  @IsUrl({
+    require_protocol: true,
+  })
+  url: string;
+}
+
 export class PaginateDto {
   @IsOptional()
   @IsString()
@@ -80,4 +99,9 @@ export class PaginateDto {
   @IsOptional()
   @IsString()
   skip = '0';
+
+  @IsOptional()
+  @IsEthereumAddress()
+  @Transform(({ value }) => value.trim())
+  deployer_address: string;
 }

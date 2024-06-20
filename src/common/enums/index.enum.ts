@@ -5,3 +5,7 @@ export enum FileMimes {
   GIF = 'image/gif',
   SVG = 'image/svg+xml',
 }
+
+export enum SocialType {
+  FARCASTER = 'farcaster',
+}

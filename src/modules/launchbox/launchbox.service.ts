@@ -1,24 +1,41 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { LaunchboxToken } from './entities/launchbox.entity';
+import { HttpService } from '@nestjs/axios';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
+import { v4 as uuidv4 } from 'uuid';
+import validator from 'validator';
 import { MongoRepository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ChainDto, CreateDto, PaginateDto } from './dtos/launchbox.dto';
+import {
+  LaunchboxToken,
+  LaunchboxTokenHolder,
+} from './entities/launchbox.entity';
+import {
+  ChainDto,
+  CreateDto,
+  PaginateDto,
+  SocialDto,
+} from './dtos/launchbox.dto';
 import { ServiceError } from '../../common/errors/service.error';
 import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
 import { IResponse } from '../../common/interfaces/response.interface';
 import { successResponse } from '../../common/responses/success.helper';
 import { Chain } from './interfaces/launchbox.interface';
-import { plainToInstance } from 'class-transformer';
-import { validateSync } from 'class-validator';
-import { v4 as uuidv4 } from 'uuid';
-import validator from 'validator';
+import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
+import { env } from '../../common/config/env';
+import { ContractService } from '../../common/helpers/contract/contract.service';
 
 @Injectable()
 export class LaunchboxService {
   constructor(
     @InjectRepository(LaunchboxToken)
     private readonly launchboxTokenRepository: MongoRepository<LaunchboxToken>,
+    @InjectRepository(LaunchboxTokenHolder)
+    private readonly launchboxTokenHolderRepository: MongoRepository<LaunchboxTokenHolder>,
     private readonly cloudinaryService: CloudinaryService,
+    private readonly farcasterService: FarcasterService,
+    private readonly httpService: HttpService,
+    private readonly contractService: ContractService,
   ) {}
 
   private logger = new Logger(LaunchboxService.name);
@@ -29,8 +46,10 @@ export class LaunchboxService {
   ): Promise<IResponse | ServiceError> {
     try {
       const formattedChain: Chain = JSON.parse(body.chain);
+      const formattedSocials: SocialDto = JSON.parse(body.socials);
 
       this.validateBodyChain(formattedChain);
+      this.validateBodySocial(formattedSocials);
 
       const tokenExists = await this.launchboxTokenRepository.findOne({
         where: {
@@ -56,6 +75,9 @@ export class LaunchboxService {
         token_total_supply: Number(body.token_total_supply),
         create_token_page: body.create_token_page === 'true',
         chain: formattedChain,
+        socials: {
+          warpcast: { channel: formattedSocials },
+        },
         token_logo_url: logoUrl,
         is_active: true,
       });
@@ -91,10 +113,21 @@ export class LaunchboxService {
     try {
       const totalTokens = await this.launchboxTokenRepository.count();
 
-      const launchboxTokens = await this.launchboxTokenRepository.find({
-        where: {
+      let queryOptions = {};
+
+      if (query.deployer_address) {
+        queryOptions = {
+          'chain.deployer_address': query.deployer_address,
           is_active: true,
-        },
+        };
+      } else {
+        queryOptions = {
+          is_active: true,
+        };
+      }
+
+      const launchboxTokens = await this.launchboxTokenRepository.find({
+        where: queryOptions,
         skip: Number(query.skip),
         take: Number(query.take),
       });
@@ -106,7 +139,7 @@ export class LaunchboxService {
         meta: {
           take: Number(query.take),
           skip: Number(query.skip),
-          totalTokens,
+          totalCount: totalTokens,
         },
       });
     } catch (error) {
@@ -156,10 +189,215 @@ export class LaunchboxService {
     }
   }
 
+  async getTokenHolders(
+    query: PaginateDto,
+    id: string,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const token = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      if (!token) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+      const holdersCount = await this.launchboxTokenHolderRepository.count({
+        where: {
+          token_id: id,
+        },
+      });
+
+      const holders = await this.launchboxTokenHolderRepository.find({
+        where: {
+          token_id: id,
+          skip: Number(query.skip),
+          take: Number(query.take),
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Token holders fetched successfully',
+        data: holders,
+        meta: {
+          take: Number(query.take),
+          skip: Number(query.skip),
+          totalCount: holdersCount,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token holders.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token holders. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getChannelsByAddress(
+    address: string,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const channels =
+        await this.farcasterService.getChannelsByAddress(address);
+
+      const formattedChannels = channels.map((channel) => {
+        return {
+          name: channel.name,
+          description: channel.description,
+          channel_id: channel.channelId,
+          image_url: channel.imageUrl,
+          lead_ids: channel.leadIds,
+          dapp_name: channel.dappName,
+          url: channel.url,
+          follower_count: channel.followerCount,
+          created_at: channel.createdAtTimestamp,
+        };
+      });
+
+      return successResponse({
+        status: true,
+        message: 'farcast channels fetched successfully',
+        data: formattedChannels,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the channels.',
+        error,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the channels. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getCoinPrice({
+    coin,
+    currency,
+  }: {
+    coin: string;
+    currency: string;
+  }): Promise<IResponse | ServiceError> {
+    try {
+      const response = await this.httpService.axiosRef.get(
+        `${env.coingecko.url}/coins/markets?vs_currency=${currency}&ids=${coin}`,
+      );
+
+      return successResponse({
+        status: true,
+        message: 'Get current coin price',
+        data: {
+          name: response.data[0].name,
+          symbol: response.data[0].symbol,
+          price: response.data[0].current_price,
+          currency,
+          last_updated: response.data[0].last_updated,
+        },
+      });
+    } catch (error) {
+      this.logger.error('An error occurred while fetching the price.', error);
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the price. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async seedTokenHolders(): Promise<IResponse | ServiceError> {
+    try {
+      const tokens = await this.launchboxTokenRepository.find();
+
+      for (const token of tokens) {
+        const holders = await this.contractService.getTokenHolders(
+          token.token_address,
+        );
+
+        if (!holders) {
+          return successResponse({
+            status: true,
+            message: 'Token holders fetched successfully',
+            data: {},
+          });
+        }
+
+        const holderEntries = Object.entries(holders).filter(([, balance]) =>
+          balance.gt(0),
+        );
+
+        for (const [address, balance] of holderEntries) {
+          if (balance.eq(0)) {
+            await this.launchboxTokenHolderRepository.deleteOne({ address });
+          } else {
+            await this.launchboxTokenHolderRepository.updateOne(
+              { address },
+              { balance: balance.toString() },
+              { upsert: true },
+            );
+          }
+        }
+      }
+
+      return successResponse({
+        status: true,
+        message: 'Tokens holders seeded successfully',
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while seeding the token holders.',
+        error,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while seeding the token holders. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
   private validateBodyChain(chain: Chain) {
     const chainDTO = plainToInstance(ChainDto, chain);
 
     const validationErrors = validateSync(chainDTO);
+
+    if (validationErrors.length > 0) {
+      const errorMessage = Object.values(
+        validationErrors[0].constraints as {
+          [type: string]: string;
+        },
+      )[0];
+
+      throw new ServiceError(errorMessage, HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  private validateBodySocial(socials: SocialDto) {
+    const socialDTO = plainToInstance(SocialDto, socials);
+
+    const validationErrors = validateSync(socialDTO);
 
     if (validationErrors.length > 0) {
       const errorMessage = Object.values(

@@ -58,7 +58,4 @@ export const env = {
   client: {
     origin: envVar.get('CLIENT_ORIGIN').required().asString(),
   },
-  airstack: {
-    key: envVar.get('AIRSTACK_KEY').required().asString(),
-  },
 };

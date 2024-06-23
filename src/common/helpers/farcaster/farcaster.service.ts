@@ -23,4 +23,12 @@ export class FarcasterService {
       return [];
     }
   }
+
+  async getChannelCasts(channelUrl: string) {
+    try {
+      return await this.launchbox.getCasts(channelUrl);
+    } catch (error) {
+      return [];
+    }
+  }
 }

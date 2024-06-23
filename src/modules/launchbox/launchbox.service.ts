@@ -9,12 +9,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   LaunchboxToken,
   LaunchboxTokenHolder,
+  LaunchboxTokenTransaction,
 } from './entities/launchbox.entity';
 import {
   ChainDto,
   CreateDto,
   PaginateDto,
   SocialDto,
+  UpdateDto,
 } from './dtos/launchbox.dto';
 import { ServiceError } from '../../common/errors/service.error';
 import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
@@ -32,6 +34,8 @@ export class LaunchboxService {
     private readonly launchboxTokenRepository: MongoRepository<LaunchboxToken>,
     @InjectRepository(LaunchboxTokenHolder)
     private readonly launchboxTokenHolderRepository: MongoRepository<LaunchboxTokenHolder>,
+    @InjectRepository(LaunchboxTokenTransaction)
+    private readonly launchboxTokenTransactionRepository: MongoRepository<LaunchboxTokenTransaction>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly farcasterService: FarcasterService,
     private readonly httpService: HttpService,
@@ -109,6 +113,55 @@ export class LaunchboxService {
     }
   }
 
+  async updateOne(
+    id: string,
+    body: UpdateDto,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const token = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      if (!token) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+      await this.launchboxTokenRepository.updateOne(
+        { id },
+        {
+          $set: {
+            socials: {
+              warpcast: { channel: body.socials },
+            },
+          },
+        },
+      );
+
+      const updatedToken = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Token updated successfully',
+        data: updatedToken,
+      });
+    } catch (error) {
+      console.log(error);
+
+      this.logger.error('An error occurred while updating the token.', error);
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while updating the token. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
   async findAll(query: PaginateDto): Promise<IResponse | ServiceError> {
     try {
       const totalTokens = await this.launchboxTokenRepository.count();
@@ -120,6 +173,21 @@ export class LaunchboxService {
           'chain.deployer_address': query.deployer_address,
           is_active: true,
         };
+      } else if (query.search) {
+        queryOptions = {
+          is_active: true,
+          $or: [
+            {
+              token_name: { $regex: query.search, $options: 'i' },
+            },
+            {
+              token_symbol: { $regex: query.search, $options: 'i' },
+            },
+            {
+              token_address: { $regex: query.search, $options: 'i' },
+            },
+          ],
+        };
       } else {
         queryOptions = {
           is_active: true,
@@ -130,6 +198,9 @@ export class LaunchboxService {
         where: queryOptions,
         skip: Number(query.skip),
         take: Number(query.take),
+        order: {
+          created_at: 'DESC',
+        },
       });
 
       return successResponse({
@@ -243,6 +314,102 @@ export class LaunchboxService {
     }
   }
 
+  async getTokenCasts(id: string): Promise<IResponse | ServiceError> {
+    try {
+      const token = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      if (!token) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      } else if (!token.socials?.warpcast?.channel?.url) {
+        throw new ServiceError(
+          'Token does not have a connected channel',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const casts = await this.farcasterService.getChannelCasts(
+        token.socials.warpcast.channel.url,
+      );
+
+      return successResponse({
+        status: true,
+        message: 'Token casts fetched successfully',
+        data: casts,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token casts.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token casts. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getTokenTransactions(
+    query: PaginateDto,
+    id: string,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const token = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      if (!token) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+      const transactionsCount =
+        await this.launchboxTokenTransactionRepository.count({
+          where: {
+            token_id: id,
+          },
+        });
+
+      const transactions = await this.launchboxTokenTransactionRepository.find({
+        where: {
+          token_id: id,
+          skip: Number(query.skip),
+          take: Number(query.take),
+        },
+      });
+
+      return successResponse({
+        status: true,
+        message: 'Token transactions fetched successfully',
+        data: transactions,
+        meta: {
+          take: Number(query.take),
+          skip: Number(query.skip),
+          totalCount: transactionsCount,
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token transactions.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token transactions. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
   async getChannelsByAddress(
     address: string,
   ): Promise<IResponse | ServiceError> {
@@ -328,31 +495,56 @@ export class LaunchboxService {
       const tokens = await this.launchboxTokenRepository.find();
 
       for (const token of tokens) {
+        const tokenHolder = await this.launchboxTokenHolderRepository.findOne({
+          where: {
+            token_id: token.id,
+          },
+          order: {
+            block_number: 'DESC',
+          },
+        });
+
         const holders = await this.contractService.getTokenHolders(
           token.token_address,
+          tokenHolder?.block_number ?? token.chain.block_number ?? 0,
         );
 
         if (!holders) {
-          return successResponse({
-            status: true,
-            message: 'Token holders fetched successfully',
-            data: {},
-          });
+          continue;
         }
 
-        const holderEntries = Object.entries(holders).filter(([, balance]) =>
-          balance.gt(0),
-        );
+        const holderEntries = Object.entries(holders);
 
-        for (const [address, balance] of holderEntries) {
+        for (const [address, { balance, blockNumber }] of holderEntries) {
           if (balance.eq(0)) {
-            await this.launchboxTokenHolderRepository.deleteOne({ address });
+            await this.launchboxTokenHolderRepository.deleteOne({
+              where: { address, token_id: token.id },
+            });
           } else {
-            await this.launchboxTokenHolderRepository.updateOne(
-              { address },
-              { balance: balance.toString() },
-              { upsert: true },
-            );
+            const holder = await this.launchboxTokenHolderRepository.findOne({
+              where: { address, token_id: token.id },
+            });
+
+            if (holder) {
+              await this.launchboxTokenHolderRepository.updateOne(
+                { token_id: token.id, address },
+                {
+                  $set: {
+                    balance: balance.toString(),
+                  },
+                },
+              );
+            } else {
+              const newHolder = this.launchboxTokenHolderRepository.create({
+                id: uuidv4(),
+                balance: balance.toString(),
+                address,
+                block_number: blockNumber,
+                token_id: token.id,
+              });
+
+              await this.launchboxTokenHolderRepository.save(newHolder);
+            }
           }
         }
       }
@@ -373,6 +565,69 @@ export class LaunchboxService {
 
       throw new ServiceError(
         'An error occurred while seeding the token holders. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async seedTokenTransactions(): Promise<IResponse | ServiceError> {
+    try {
+      const tokens = await this.launchboxTokenRepository.find();
+
+      for (const token of tokens) {
+        const tokenTransactions =
+          await this.launchboxTokenTransactionRepository.findOne({
+            where: {
+              token_id: token.id,
+            },
+            order: {
+              block_number: 'DESC',
+            },
+          });
+
+        const transactions = await this.contractService.getTokenTransactions(
+          token.token_address,
+          tokenTransactions?.block_number ?? token.chain.block_number ?? 0,
+        );
+
+        if (!transactions) {
+          continue;
+        }
+
+        for (const transaction of transactions) {
+          const newTransaction =
+            this.launchboxTokenTransactionRepository.create({
+              id: uuidv4(),
+              address: transaction.address,
+              token_value: transaction.tokenValue,
+              eth_value: transaction.ethValue,
+              fee: transaction.fee,
+              type: transaction.type,
+              transaction_hash: transaction.transactionHash,
+              block_number: transaction.blockNumber,
+              token_id: token.id,
+            });
+
+          await this.launchboxTokenTransactionRepository.save(newTransaction);
+        }
+      }
+
+      return successResponse({
+        status: true,
+        message: 'Tokens transactions seeded successfully',
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while seeding the token transactions.',
+        error,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while seeding the token transactions. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
     }

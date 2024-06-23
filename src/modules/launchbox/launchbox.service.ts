@@ -50,10 +50,14 @@ export class LaunchboxService {
   ): Promise<IResponse | ServiceError> {
     try {
       const formattedChain: Chain = JSON.parse(body.chain);
-      const formattedSocials: SocialDto = JSON.parse(body.socials);
-
       this.validateBodyChain(formattedChain);
-      this.validateBodySocial(formattedSocials);
+
+      let formattedSocials: SocialDto = {} as SocialDto;
+
+      if (body.socials) {
+        formattedSocials = JSON.parse(body.socials);
+        this.validateBodySocial(formattedSocials);
+      }
 
       const tokenExists = await this.launchboxTokenRepository.findOne({
         where: {

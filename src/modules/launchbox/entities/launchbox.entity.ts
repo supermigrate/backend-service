@@ -90,6 +90,51 @@ export class LaunchboxTokenHolder {
   balance: string;
 
   @Column()
+  block_number: number;
+
+  @Column()
+  token_id: string;
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+}
+
+@Entity({
+  name: 'launchbox_token_transactions',
+})
+export class LaunchboxTokenTransaction {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  address: string;
+
+  @Column()
+  token_value: string;
+
+  @Column()
+  eth_value: string;
+
+  @Column()
+  fee: string;
+
+  @Column()
+  type: string;
+
+  @Column()
+  transaction_hash: string;
+
+  @Column()
+  block_number: number;
+
+  @Column()
   token_id: string;
 
   @CreateDateColumn()

@@ -3,6 +3,7 @@ export interface Chain {
   name: string;
   deployer_address: string;
   transaction_hash: string;
+  block_number: number;
 }
 
 export interface Social {

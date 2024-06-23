@@ -7,6 +7,7 @@ import {
   MaxFileSizeValidator,
   Param,
   ParseFilePipe,
+  Patch,
   Post,
   Query,
   UploadedFile,
@@ -16,7 +17,7 @@ import { LaunchboxService } from './launchbox.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
 import { env } from '../../common/config/env';
-import { CreateDto, PaginateDto } from './dtos/launchbox.dto';
+import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
 import { FileMimes } from '../../common/enums/index.enum';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/responses';
@@ -97,6 +98,26 @@ export class LaunchboxController {
     description: 'Token not found',
     type: ErrorResponse,
   })
+  @Patch('/tokens/:id')
+  async updateOne(@Param('id') id: string, @Body() body: UpdateDto) {
+    return this.launchboxService.updateOne(id, body);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token. Please try again later.',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
   @Get('/tokens/:reference')
   async findOne(@Param('reference') reference: string) {
     return this.launchboxService.findOne(reference);
@@ -120,6 +141,49 @@ export class LaunchboxController {
   @Get('/tokens/:id/holders')
   async getTokenHolders(@Query() query: PaginateDto, @Param('id') id: string) {
     return this.launchboxService.getTokenHolders(query, id);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token transactions fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token transactions. Please try again later.',
+    type: ErrorResponse,
+  })
+  @Get('/tokens/:id/transactions')
+  async getTokenTransactions(
+    @Query() query: PaginateDto,
+    @Param('id') id: string,
+  ) {
+    return this.launchboxService.getTokenTransactions(query, id);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token casts fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token casts. Please try again later.',
+    type: ErrorResponse,
+  })
+  @Get('/tokens/:id/casts')
+  async getTokenCasts(@Param('id') id: string) {
+    return this.launchboxService.getTokenCasts(id);
   }
 
   @ApiResponse({
@@ -156,5 +220,10 @@ export class LaunchboxController {
   @Get('tokens/holders/seed')
   async seedHolders() {
     return this.launchboxService.seedTokenHolders();
+  }
+
+  @Get('tokens/transactions/seed')
+  async seedTransactions() {
+    return this.launchboxService.seedTokenTransactions();
   }
 }

@@ -1,12 +1,57 @@
 import {
+  IsArray,
+  IsDateString,
   IsEthereumAddress,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUrl,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+export class SocialDto {
+  @IsNotEmpty()
+  @IsString()
+  channel_id: string;
+
+  @IsNotEmpty()
+  @IsString()
+  name: string;
+
+  @IsNotEmpty()
+  @IsString()
+  description: string;
+
+  @IsNotEmpty()
+  @IsString()
+  dapp_name: string;
+
+  @IsNotEmpty()
+  @IsUrl({
+    require_protocol: true,
+  })
+  url: string;
+
+  @IsNotEmpty()
+  @IsUrl({
+    require_protocol: true,
+  })
+  image_url: string;
+
+  @IsNotEmpty()
+  @IsNumber()
+  follower_count: number;
+
+  @IsNotEmpty()
+  @IsArray()
+  lead_ids: string[];
+
+  @IsNotEmpty()
+  @IsDateString()
+  created_at: Date;
+}
 
 export class CreateDto {
   @IsNotEmpty()
@@ -57,6 +102,13 @@ export class CreateDto {
   chain: string;
 }
 
+export class UpdateDto {
+  @IsOptional()
+  @Type(() => SocialDto)
+  @ValidateNested()
+  socials: Record<string, any>;
+}
+
 export class ChainDto {
   @IsNotEmpty()
   @IsNumber()
@@ -73,27 +125,16 @@ export class ChainDto {
   @IsString()
   @IsNotEmpty()
   transaction_hash: string;
-}
-
-export class SocialDto {
-  @IsNotEmpty()
-  @IsString()
-  channel_id: string;
 
   @IsNotEmpty()
-  @IsString()
-  name: string;
-
-  @IsNotEmpty()
-  @IsUrl({
-    require_protocol: true,
-  })
-  url: string;
+  @IsNumber()
+  block_number: number;
 }
 
 export class PaginateDto {
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => (parseInt(value.trim()) > 50 ? '50' : value.trim()))
   take = '50';
 
   @IsOptional()
@@ -104,4 +145,9 @@ export class PaginateDto {
   @IsEthereumAddress()
   @Transform(({ value }) => value.trim())
   deployer_address: string;
+
+  @IsOptional()
+  @IsString()
+  @Transform(({ value }) => value.trim())
+  search: string;
 }

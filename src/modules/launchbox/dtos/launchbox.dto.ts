@@ -134,6 +134,7 @@ export class ChainDto {
 export class PaginateDto {
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => (parseInt(value.trim()) > 50 ? '50' : value.trim()))
   take = '50';
 
   @IsOptional()

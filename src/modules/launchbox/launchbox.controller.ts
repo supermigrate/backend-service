@@ -19,7 +19,7 @@ import { env } from '../../common/config/env';
 import { FileMimes } from '../../common/enums/index.enum';
 import { ErrorResponse } from '../../common/responses';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
-import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
+import { ActionDTO, CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
 import { LaunchboxService } from './launchbox.service';
 
 @ApiTags('Launchbox')
@@ -257,11 +257,16 @@ export class LaunchboxController {
   }
 
 
-  // 
-  @Post("/incentives")
-  async activateIncentive(@Param('id') id: string) {
-    return this.launchboxService.getSystemChannels()
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get System default incentive channels',
+  })
+  @Post("/tokens/:id/incentives")
+  async activateIncentive(@Param('id') id: string, @Body() action: ActionDTO) {
+    return this.launchboxService.addIncentiveAction(id, action)
   }
+
 
 
 }

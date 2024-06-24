@@ -744,8 +744,10 @@ export class LaunchboxService {
           if (channel) {
             const action = channel.actions.find(ac => ac.id === cfg.action_id);
             if (action) {
+              // FIX: do this at entity level
+              const { _id, ...clean } = channel
               return {
-                ...channel,
+                ...clean,
                 actions: [action]
               };
             }
@@ -756,7 +758,7 @@ export class LaunchboxService {
 
       return successResponse({
         status: true,
-        message: 'Token casts fetched successfully',
+        message: 'success',
         data: response,
       });
 
@@ -939,7 +941,8 @@ export class LaunchboxService {
       const leaderboard = await this.leaderboardRepository.findOne({
         where: {
           token_id
-        }
+        },
+        relations: ["incentives"]
       });
 
       if (!leaderboard) {
@@ -952,8 +955,13 @@ export class LaunchboxService {
       newAction.points = action.points;
       newAction.is_active = true;
 
-      leaderboard.incentives.push(newAction);
-      await this.leaderboardRepository.save(leaderboard);
+
+      const updates = leaderboard.incentives ? [...leaderboard.incentives, newAction] : [newAction]
+      await this.leaderboardRepository.updateOne({ id: leaderboard.id }, {
+        $set: {
+          incentives: updates
+        }
+      })
 
       return successResponse({
         status: true,

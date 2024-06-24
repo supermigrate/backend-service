@@ -13,20 +13,20 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { LaunchboxService } from './launchbox.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
-import { env } from '../../common/config/env';
-import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
-import { FileMimes } from '../../common/enums/index.enum';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { env } from '../../common/config/env';
+import { FileMimes } from '../../common/enums/index.enum';
 import { ErrorResponse } from '../../common/responses';
+import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
+import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
+import { LaunchboxService } from './launchbox.service';
 
 @ApiTags('Launchbox')
 @UseInterceptors(ClassSerializerInterceptor)
 @Controller('launchbox')
 export class LaunchboxController {
-  constructor(private readonly launchboxService: LaunchboxService) {}
+  constructor(private readonly launchboxService: LaunchboxService) { }
 
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -225,5 +225,20 @@ export class LaunchboxController {
   @Get('tokens/transactions/seed')
   async seedTransactions() {
     return this.launchboxService.seedTokenTransactions();
+  }
+
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get current coin price in USD',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the price',
+    type: ErrorResponse,
+  })
+  @Get("/tokens/:id/ranking")
+  async getLeaderBoard(@Param('id') id: string) {
+    return this.launchboxService.getTokenLeaderBoard(id)
   }
 }

@@ -1,16 +1,20 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
-import { LaunchboxService } from './launchbox.service';
-import { LaunchboxController } from './launchbox.controller';
+import { Module, OnModuleInit } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { CloudinaryModule } from '../../common/helpers/cloudinary/cloudinary.module';
+import { ContractModule } from '../../common/helpers/contract/contract.module';
+import { FarcasterModule } from '../../common/helpers/farcaster/farcaster.module';
 import {
+  IncentiveAction,
+  IncentiveChannel,
   LaunchboxToken,
   LaunchboxTokenHolder,
+  LaunchboxTokenLeaderboard,
   LaunchboxTokenTransaction,
+  LeaderboardParticipant,
 } from './entities/launchbox.entity';
-import { CloudinaryModule } from '../../common/helpers/cloudinary/cloudinary.module';
-import { FarcasterModule } from '../../common/helpers/farcaster/farcaster.module';
-import { ContractModule } from '../../common/helpers/contract/contract.module';
+import { LaunchboxController } from './launchbox.controller';
+import { LaunchboxService } from './launchbox.service';
 
 @Module({
   imports: [
@@ -18,6 +22,10 @@ import { ContractModule } from '../../common/helpers/contract/contract.module';
       LaunchboxToken,
       LaunchboxTokenHolder,
       LaunchboxTokenTransaction,
+      LaunchboxTokenLeaderboard,
+      IncentiveAction,
+      IncentiveChannel,
+      LeaderboardParticipant,
     ]),
     CloudinaryModule,
     FarcasterModule,
@@ -28,4 +36,9 @@ import { ContractModule } from '../../common/helpers/contract/contract.module';
   controllers: [LaunchboxController],
   exports: [LaunchboxService],
 })
-export class LaunchboxModule {}
+export class LaunchboxModule implements OnModuleInit {
+  constructor(private readonly service: LaunchboxService) { }
+  async onModuleInit() {
+    await this.service.seedSystemChannels()
+  }
+}

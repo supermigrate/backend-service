@@ -1,16 +1,18 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
+import { MongoRepository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import validator from 'validator';
-import { MongoRepository } from 'typeorm';
-import { InjectRepository } from '@nestjs/typeorm';
-import {
-  LaunchboxToken,
-  LaunchboxTokenHolder,
-  LaunchboxTokenTransaction,
-} from './entities/launchbox.entity';
+import { env } from '../../common/config/env';
+import { ServiceError } from '../../common/errors/service.error';
+import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
+import { ContractService } from '../../common/helpers/contract/contract.service';
+import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
+import { IResponse } from '../../common/interfaces/response.interface';
+import { successResponse } from '../../common/responses/success.helper';
 import {
   ChainDto,
   CreateDto,
@@ -18,14 +20,15 @@ import {
   SocialDto,
   UpdateDto,
 } from './dtos/launchbox.dto';
-import { ServiceError } from '../../common/errors/service.error';
-import { CloudinaryService } from '../../common/helpers/cloudinary/cloudinary.service';
-import { IResponse } from '../../common/interfaces/response.interface';
-import { successResponse } from '../../common/responses/success.helper';
+import {
+  IncentiveChannel,
+  LaunchboxToken,
+  LaunchboxTokenHolder,
+  LaunchboxTokenLeaderboard,
+  LaunchboxTokenTransaction,
+} from './entities/launchbox.entity';
+import { ChannelSlug, FarcasterActions, NFTActions } from './enums/leaderboard.enum';
 import { Chain } from './interfaces/launchbox.interface';
-import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
-import { env } from '../../common/config/env';
-import { ContractService } from '../../common/helpers/contract/contract.service';
 
 @Injectable()
 export class LaunchboxService {
@@ -40,7 +43,14 @@ export class LaunchboxService {
     private readonly farcasterService: FarcasterService,
     private readonly httpService: HttpService,
     private readonly contractService: ContractService,
-  ) {}
+
+    @InjectRepository(LaunchboxTokenLeaderboard)
+    private readonly leaderboardRepository: MongoRepository<LaunchboxTokenLeaderboard>,
+
+
+    @InjectRepository(IncentiveChannel)
+    private readonly incentiveChannelRespository: MongoRepository<IncentiveChannel>
+  ) { }
 
   private logger = new Logger(LaunchboxService.name);
 
@@ -89,6 +99,8 @@ export class LaunchboxService {
         token_logo_url: logoUrl,
         is_active: true,
       });
+
+
 
       await this.launchboxTokenRepository.save(launchbox);
 
@@ -667,5 +679,179 @@ export class LaunchboxService {
 
       throw new ServiceError(errorMessage, HttpStatus.BAD_REQUEST);
     }
+  }
+
+
+
+  private async calculateFarcasterActionPoints() { }
+
+  private async calculateNFTActionPoints() { }
+
+  async getTokenLeaderBoard(id: string): Promise<IResponse | ServiceError> {
+    try {
+      const token = await this.launchboxTokenRepository.findOne({
+        where: { id },
+      });
+
+      if (!token) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      } else if (!token.socials?.warpcast?.channel?.url) {
+        throw new ServiceError(
+          'Token does not have a connected channel',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      const leaderboard = await this.leaderboardRepository.findOne({
+
+      })
+
+      return successResponse({
+        status: true,
+        message: 'Token casts fetched successfully',
+        data: {},
+      });
+
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token casts.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token casts. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+
+  async activateLeaderboard(token_id: string): Promise<IResponse | ServiceError> {
+    try {
+      const lbToken = await this.launchboxTokenRepository.findOne({
+        where: {
+          id: token_id
+        }
+      })
+
+      if (!lbToken) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+      let leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        }
+      })
+
+      if (!leaderboard) {
+        leaderboard = await this.leaderboardRepository.save(this.leaderboardRepository.create({
+          token_id,
+          is_active: true
+        }))
+      }
+
+      if (!leaderboard.is_active) {
+        await this.leaderboardRepository.updateOne({ token_id },
+          {
+            $set: {
+              is_active: true,
+            },
+          },)
+      }
+
+
+
+      return successResponse({
+        status: true,
+        message: 'Token casts fetched successfully',
+        data: leaderboard,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token casts.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token casts. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse()
+    }
+  }
+
+
+  private async getSystemChannels(): Promise<IncentiveChannel[]> {
+    try {
+      const channels = await this.incentiveChannelRespository.find()
+      return channels
+    } catch (error) {
+      console.log(error)
+      throw new ServiceError('something went wrong', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  async seedSystemChannels() {
+    const channels = [
+      {
+        id: uuidv4(),
+        name: 'NFT',
+        slug: ChannelSlug.NFT,
+        info:
+          'Users hold the project NFT earn points.',
+        actions: [
+          {
+            id: uuidv4(),
+            name: "OWN",
+            description: "User must own the channel NFT",
+            slug: NFTActions.OWN
+          },
+
+        ]
+      },
+      {
+        id: uuidv4(),
+        name: 'FARCASTER',
+        slug: ChannelSlug.FARCASTER,
+        info:
+          'Users who participate in project Channel earn points.',
+        actions: [
+          {
+            id: uuidv4(),
+            name: "CAST",
+            description: "User must cast in channel",
+            slug: FarcasterActions.CAST
+          },
+          {
+            id: uuidv4(),
+            name: "FOLLOW",
+            description: "User must follow",
+            slug: FarcasterActions.FOLLOW_CHAN
+          },
+        ]
+      },
+    ];
+
+    const activityPromises = channels.map(async (channel) => {
+      const channelExist = await this.incentiveChannelRespository.findOne({
+        where: {
+          slug: channel.slug,
+        },
+      });
+
+      if (!channelExist) {
+        await this.incentiveChannelRespository.save(channel)
+      }
+    });
+
+    await Promise.all(activityPromises);
   }
 }

@@ -11,6 +11,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { Transform, Type } from 'class-transformer';
+
+
 export class SocialDto {
   @IsNotEmpty()
   @IsString()
@@ -150,6 +153,7 @@ export class PaginateDto {
   @IsString()
   @Transform(({ value }) => value.trim())
   search: string;
+
 }
 
 
@@ -170,4 +174,5 @@ export class ActionDTO {
 
   @IsNotEmpty()
   id: string
+
 }

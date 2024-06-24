@@ -1,5 +1,6 @@
 import { HttpService } from '@nestjs/axios';
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
@@ -34,6 +35,7 @@ import {
 import { ChannelSlug, FarcasterActions, NFTActions } from './enums/leaderboard.enum';
 import { Chain, IIncentiveChannel, ILaunchboxTokenLeaderboard } from './interfaces/launchbox.interface';
 
+
 @Injectable()
 export class LaunchboxService {
   constructor(
@@ -58,6 +60,8 @@ export class LaunchboxService {
     @InjectRepository(LeaderboardParticipant)
     private readonly leaderboardParticipantRepository: MongoRepository<LeaderboardParticipant>
   ) { }
+
+
 
   private logger = new Logger(LaunchboxService.name);
 

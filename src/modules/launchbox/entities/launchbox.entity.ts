@@ -290,3 +290,4 @@ export class LeaderboardParticipant {
   @Column()
   completed_actions: TokenConfiguredAction[]
 }
+

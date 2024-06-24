@@ -15,6 +15,7 @@ export interface Social {
       url: string;
     };
   };
+
 }
 
 export interface ILaunchboxTokenLeaderboard {
@@ -49,4 +50,5 @@ export interface ILeaderboardParticipant {
   created_at: Date;
   updated_at: Date;
   completed_actions: IIncentiveAction[];
+
 }

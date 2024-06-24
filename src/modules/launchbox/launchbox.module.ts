@@ -1,3 +1,4 @@
+
 import { HttpModule } from '@nestjs/axios';
 import { Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -16,16 +17,19 @@ import {
 import { LaunchboxController } from './launchbox.controller';
 import { LaunchboxService } from './launchbox.service';
 
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       LaunchboxToken,
       LaunchboxTokenHolder,
       LaunchboxTokenTransaction,
+
       LaunchboxTokenLeaderboard,
       IncentiveAction,
       IncentiveChannel,
       LeaderboardParticipant,
+
     ]),
     CloudinaryModule,
     FarcasterModule,

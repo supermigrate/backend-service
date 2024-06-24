@@ -170,6 +170,10 @@ export class LaunchboxTokenLeaderboard {
 
   @Column((type) => TokenConfiguredAction)
   incentives: TokenConfiguredAction[]
+
+
+  @Column((type) => LeaderboardParticipant)
+  participants: LeaderboardParticipant[]
 }
 
 @Entity({
@@ -284,5 +288,5 @@ export class LeaderboardParticipant {
   updated_at: Date;
 
   @Column()
-  completed_actions: IncentiveAction[]
+  completed_actions: TokenConfiguredAction[]
 }

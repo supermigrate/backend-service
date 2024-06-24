@@ -1,3 +1,4 @@
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsDateString,
@@ -9,7 +10,6 @@ import {
   IsUrl,
   ValidateNested,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
 
 export class SocialDto {
   @IsNotEmpty()
@@ -106,7 +106,7 @@ export class UpdateDto {
   @IsOptional()
   @Type(() => SocialDto)
   @ValidateNested()
-  socials: Record<string, any>;
+  socials: { [key: string]: SocialDto };
 }
 
 export class ChainDto {
@@ -150,4 +150,24 @@ export class PaginateDto {
   @IsString()
   @Transform(({ value }) => value.trim())
   search: string;
+}
+
+
+export class RankingPaginateDto {
+  @IsNotEmpty()
+  @IsNumber()
+  limit: number;
+
+  @IsNotEmpty()
+  @IsNumber()
+  page: number;
+}
+
+export class ActionDTO {
+  @IsNotEmpty()
+  @IsNumber()
+  points: number;
+
+  @IsNotEmpty()
+  id: string
 }

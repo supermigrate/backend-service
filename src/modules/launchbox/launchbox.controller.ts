@@ -11,7 +11,7 @@ import {
   Post,
   Query,
   UploadedFile,
-  UseInterceptors,
+  UseInterceptors
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -230,15 +230,38 @@ export class LaunchboxController {
 
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Get current coin price in USD',
+    description: 'Get token leaderboard',
   })
   @ApiResponse({
     status: HttpStatus.INTERNAL_SERVER_ERROR,
-    description: 'An error occurred while fetching the price',
+    description: 'An error occurred while fetching the leaderboard',
     type: ErrorResponse,
   })
   @Get("/tokens/:id/ranking")
   async getLeaderBoard(@Param('id') id: string) {
     return this.launchboxService.getTokenLeaderBoard(id)
   }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get System default incentive channels',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the channels',
+    type: ErrorResponse,
+  })
+  @Get("/incentive_channels")
+  async getSystemChannels() {
+    return this.launchboxService.getSystemChannels()
+  }
+
+
+  // 
+  @Post("/incentives")
+  async activateIncentive(@Param('id') id: string) {
+    return this.launchboxService.getSystemChannels()
+  }
+
+
 }

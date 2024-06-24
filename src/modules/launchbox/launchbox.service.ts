@@ -14,11 +14,13 @@ import { FarcasterService } from '../../common/helpers/farcaster/farcaster.servi
 import { IResponse } from '../../common/interfaces/response.interface';
 import { successResponse } from '../../common/responses/success.helper';
 import {
+  ActionDTO,
   ChainDto,
   CreateDto,
   PaginateDto,
+  RankingPaginateDto,
   SocialDto,
-  UpdateDto,
+  UpdateDto
 } from './dtos/launchbox.dto';
 import {
   IncentiveChannel,
@@ -26,9 +28,11 @@ import {
   LaunchboxTokenHolder,
   LaunchboxTokenLeaderboard,
   LaunchboxTokenTransaction,
+  LeaderboardParticipant,
+  TokenConfiguredAction,
 } from './entities/launchbox.entity';
 import { ChannelSlug, FarcasterActions, NFTActions } from './enums/leaderboard.enum';
-import { Chain } from './interfaces/launchbox.interface';
+import { Chain, IIncentiveChannel, ILaunchboxTokenLeaderboard } from './interfaces/launchbox.interface';
 
 @Injectable()
 export class LaunchboxService {
@@ -49,7 +53,10 @@ export class LaunchboxService {
 
 
     @InjectRepository(IncentiveChannel)
-    private readonly incentiveChannelRespository: MongoRepository<IncentiveChannel>
+    private readonly incentiveChannelRespository: MongoRepository<IncentiveChannel>,
+
+    @InjectRepository(LeaderboardParticipant)
+    private readonly leaderboardParticipantRepository: MongoRepository<LeaderboardParticipant>
   ) { }
 
   private logger = new Logger(LaunchboxService.name);
@@ -702,14 +709,55 @@ export class LaunchboxService {
         );
       }
 
-      const leaderboard = await this.leaderboardRepository.findOne({
-
+      let leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id: token.id
+        }
       })
+
+      if (!leaderboard) {
+        await this.leaderboardRepository.save(this.leaderboardRepository.create({
+          is_active: true,
+          token_id: token.id,
+          id: uuidv4(),
+          incentives: []
+        }))
+      }
+
+      leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id: token.id
+        },
+        relations: ['participants', "incentives"]
+      })
+      const { _id, ...data } = leaderboard!;
+
+      let response: ILaunchboxTokenLeaderboard = {
+        ...data,
+        incentives: []
+      }
+
+      if (data.incentives && data.incentives.length >= 1) {
+        const channels = await this.getSystemChannels();
+        response.incentives = data.incentives.map((cfg) => {
+          const channel = channels.find(ch => ch.actions.some(ac => ac.id === cfg.action_id));
+          if (channel) {
+            const action = channel.actions.find(ac => ac.id === cfg.action_id);
+            if (action) {
+              return {
+                ...channel,
+                actions: [action]
+              };
+            }
+          }
+          return null;
+        }).filter(i => i !== null) as unknown as IIncentiveChannel[];
+      }
 
       return successResponse({
         status: true,
         message: 'Token casts fetched successfully',
-        data: {},
+        data: response,
       });
 
     } catch (error) {
@@ -729,14 +777,13 @@ export class LaunchboxService {
     }
   }
 
-
   async activateLeaderboard(token_id: string): Promise<IResponse | ServiceError> {
     try {
       const lbToken = await this.launchboxTokenRepository.findOne({
         where: {
           id: token_id
         }
-      })
+      });
 
       if (!lbToken) {
         throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
@@ -746,13 +793,13 @@ export class LaunchboxService {
         where: {
           token_id
         }
-      })
+      });
 
       if (!leaderboard) {
         leaderboard = await this.leaderboardRepository.save(this.leaderboardRepository.create({
           token_id,
           is_active: true
-        }))
+        }));
       }
 
       if (!leaderboard.is_active) {
@@ -761,11 +808,8 @@ export class LaunchboxService {
             $set: {
               is_active: true,
             },
-          },)
+          });
       }
-
-
-
       return successResponse({
         status: true,
         message: 'Token casts fetched successfully',
@@ -784,17 +828,198 @@ export class LaunchboxService {
       throw new ServiceError(
         'An error occurred while fetching the token casts. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
-      ).toErrorResponse()
+      ).toErrorResponse();
     }
   }
 
-
-  private async getSystemChannels(): Promise<IncentiveChannel[]> {
+  // fix this function to get a user's rank by their wallet address
+  async getRank(address: string, token_id: string): Promise<IResponse | ServiceError> {
     try {
-      const channels = await this.incentiveChannelRespository.find()
-      return channels
+      const participant = await this.leaderboardParticipantRepository.findOne({
+        where: {
+          associated_address: address,
+          leaderboard_id: token_id
+        }
+      });
+
+      if (!participant) {
+        throw new ServiceError('Participant not found', HttpStatus.NOT_FOUND);
+      }
+
+      const leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        },
+        relations: ['participants']
+      });
+
+      if (!leaderboard) {
+        throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
+      }
+
+      const sortedParticipants = leaderboard.participants.sort((a, b) => {
+        const aPoints = a.completed_actions.reduce((acc, action) => acc + action.points, 0);
+        const bPoints = b.completed_actions.reduce((acc, action) => acc + action.points, 0);
+        return bPoints - aPoints;
+      });
+
+      const rank = sortedParticipants.findIndex(p => p.associated_address === address) + 1;
+
+      return successResponse({
+        status: true,
+        message: 'Rank fetched successfully',
+        data: { rank },
+      });
     } catch (error) {
-      console.log(error)
+      this.logger.error(
+        'An error occurred while fetching the rank.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the rank. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  // get full paginated leader board, format 
+  async getRanking(token_id: string, paginate: RankingPaginateDto): Promise<IResponse | ServiceError> {
+    try {
+      const leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        },
+        relations: ['participants']
+      });
+
+      if (!leaderboard) {
+        throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
+      }
+
+      const sortedParticipants = leaderboard.participants.sort((a, b) => {
+        const aPoints = a.completed_actions.reduce((acc, action) => acc + action.points, 0);
+        const bPoints = b.completed_actions.reduce((acc, action) => acc + action.points, 0);
+        return bPoints - aPoints;
+      });
+
+      const paginatedParticipants = sortedParticipants.slice((paginate.page - 1) * paginate.limit, paginate.page * paginate.limit);
+
+      return successResponse({
+        status: true,
+        message: 'Ranking fetched successfully',
+        data: {
+          participants: paginatedParticipants,
+          total: sortedParticipants.length
+        },
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the ranking.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the ranking. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async addIncentiveAction(token_id: string, action: ActionDTO): Promise<IResponse | ServiceError> {
+    try {
+      const leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        }
+      });
+
+      if (!leaderboard) {
+        throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
+      }
+
+      const newAction = new TokenConfiguredAction();
+      newAction.id = uuidv4();
+      newAction.action_id = action.id;
+      newAction.points = action.points;
+      newAction.is_active = true;
+
+      leaderboard.incentives.push(newAction);
+      await this.leaderboardRepository.save(leaderboard);
+
+      return successResponse({
+        status: true,
+        message: 'Action added successfully',
+        data: leaderboard,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while adding the incentive action.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while adding the incentive action. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async removeIncentiveAction(token_id: string, action_id: string): Promise<IResponse | ServiceError> {
+    try {
+      const leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        }
+      });
+
+      if (!leaderboard) {
+        throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
+      }
+
+      leaderboard.incentives = leaderboard.incentives.filter(action => action.action_id !== action_id);
+      await this.leaderboardRepository.save(leaderboard);
+
+      return successResponse({
+        status: true,
+        message: 'Action removed successfully',
+        data: leaderboard,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while removing the incentive action.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while removing the incentive action. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getSystemChannels(): Promise<IncentiveChannel[]> {
+    try {
+      const channels = await this.incentiveChannelRespository.find();
+      return channels;
+    } catch (error) {
+      console.log(error);
       throw new ServiceError('something went wrong', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
@@ -814,7 +1039,6 @@ export class LaunchboxService {
             description: "User must own the channel NFT",
             slug: NFTActions.OWN
           },
-
         ]
       },
       {
@@ -848,10 +1072,11 @@ export class LaunchboxService {
       });
 
       if (!channelExist) {
-        await this.incentiveChannelRespository.save(channel)
+        await this.incentiveChannelRespository.save(channel);
       }
     });
 
     await Promise.all(activityPromises);
   }
+
 }

@@ -378,6 +378,18 @@ export class LaunchboxService {
           token_id: id,
         });
 
+      const totalSellCount =
+        await this.launchboxTokenTransactionRepository.count({
+          token_id: id,
+          type: 'sell',
+        });
+
+      const totalBuyCount =
+        await this.launchboxTokenTransactionRepository.count({
+          token_id: id,
+          type: 'sell',
+        });
+
       const transactions = await this.launchboxTokenTransactionRepository.find({
         where: {
           token_id: id,
@@ -397,6 +409,8 @@ export class LaunchboxService {
           take: Number(query.take),
           skip: Number(query.skip),
           totalCount: transactionsCount,
+          totalSellCount: totalSellCount,
+          totalBuyCount: totalBuyCount,
         },
       });
     } catch (error) {

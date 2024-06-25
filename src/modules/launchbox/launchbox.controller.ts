@@ -11,22 +11,25 @@ import {
   Post,
   Query,
   UploadedFile,
-  UseInterceptors,
+  UseInterceptors
 } from '@nestjs/common';
-import { LaunchboxService } from './launchbox.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
-import { env } from '../../common/config/env';
-import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
-import { FileMimes } from '../../common/enums/index.enum';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
+import { env } from '../../common/config/env';
+
+import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
+
+import { FileMimes } from '../../common/enums/index.enum';
 import { ErrorResponse } from '../../common/responses';
+import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
+import { ActionDTO, PlayDTO, RankingPaginateDto } from './dtos/launchbox.dto';
+import { LaunchboxService } from './launchbox.service';
 
 @ApiTags('Launchbox')
 @UseInterceptors(ClassSerializerInterceptor)
 @Controller('launchbox')
 export class LaunchboxController {
-  constructor(private readonly launchboxService: LaunchboxService) {}
+  constructor(private readonly launchboxService: LaunchboxService) { }
 
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -226,4 +229,64 @@ export class LaunchboxController {
   async seedTransactions() {
     return this.launchboxService.seedTokenTransactions();
   }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get token leaderboard',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the leaderboard',
+    type: ErrorResponse,
+  })
+  @Get("/tokens/:id/ranking")
+  async getLeaderBoard(@Param('id') id: string) {
+    return this.launchboxService.getTokenLeaderBoard(id)
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get System default incentive channels',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description: 'An error occurred while fetching the channels',
+    type: ErrorResponse,
+  })
+  @Get("/incentive_channels")
+  async getSystemChannels() {
+    return this.launchboxService.getSystemChannels()
+  }
+
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Get System default incentive channels',
+  })
+  @Post("/tokens/:id/incentives")
+  async activateIncentive(@Param('id') id: string, @Body() action: ActionDTO) {
+    return this.launchboxService.addIncentiveAction(id, action)
+  }
+
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Participate in activities to earn points',
+  })
+  @Post("/tokens/:id/earn")
+  async earnPoints(@Param('id') id: string, @Body() body: PlayDTO) {
+    return this.launchboxService.earnPoints(id, body)
+  }
+
+
+  @Get("/tokens/:id/rank")
+  async getWalletRank(@Param('id') id: string, @Query("adddress") user_address: string) {
+    return this.launchboxService.getRank(user_address, id)
+  }
+
+  @Get("/tokens/:id/leaderboard")
+  async getTokenLeaderboard(@Param("id") id: string, @Query() query: RankingPaginateDto) {
+    return this.launchboxService.getAllRanking(id, query)
+  }
+
 }

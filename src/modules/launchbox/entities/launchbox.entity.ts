@@ -8,8 +8,8 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { Chain, Social } from '../interfaces/launchbox.interface';
-
 @Entity({
   name: 'launchbox_tokens',
 })
@@ -142,4 +142,162 @@ export class LaunchboxTokenTransaction {
 
   @UpdateDateColumn()
   updated_at: Date;
+}
+
+
+@Entity({
+  name: "launchbox_token_leaderboard"
+})
+export class LaunchboxTokenLeaderboard {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  token_id: string;
+
+  @Column()
+  is_active: boolean;
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+
+  @Column((type) => TokenConfiguredAction)
+  incentives: TokenConfiguredAction[]
+
+
+  @Column((type) => LeaderboardParticipant)
+  participants: LeaderboardParticipant[]
+}
+
+@Entity({
+  name: "launchbox_token_leaderboard_actions"
+})
+export class TokenConfiguredAction {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  action_id: string;
+
+  @Column()
+  points: number;
+
+  @Column()
+  is_active: boolean
+
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+}
+
+
+@Entity({
+  name: "launchbox_incentive_channels"
+})
+export class IncentiveChannel {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+
+  @Column()
+  name: string;
+
+
+  @Column()
+  info: string;
+
+  @Column()
+  slug: string;
+
+
+  @Column((type) => IncentiveAction)
+  actions: IncentiveAction[]
+}
+
+
+@Entity({
+  name: "launchbox_incentive_actions"
+})
+export class IncentiveAction {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  name: string;
+
+  @Column()
+  description: string;
+
+  @Column()
+  channel_id: string
+
+  @Column()
+  slug: string
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+}
+
+
+@Entity({
+  name: "launchbox_token_leaderboard_participant"
+})
+export class LeaderboardParticipant {
+  @Exclude()
+  @ObjectIdColumn({ select: false })
+  _id: ObjectId;
+
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  associated_address: string;
+
+  @Column()
+  leaderboard_id: string;
+
+  @Column()
+  farcaster_username: string
+
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
+
+  @Column()
+  completed_actions: string[]
+
+
+  constructor(leaderboard_id: string, username: string, address: string) {
+    this.id = uuidv4()
+    this.leaderboard_id = leaderboard_id
+    this.farcaster_username = username
+    this.associated_address = address
+  }
 }

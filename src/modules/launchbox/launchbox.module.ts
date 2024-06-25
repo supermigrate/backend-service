@@ -13,6 +13,7 @@ import {
   LaunchboxTokenLeaderboard,
   LaunchboxTokenTransaction,
   LeaderboardParticipant,
+  TokenConfiguredAction,
 } from './entities/launchbox.entity';
 import { LaunchboxController } from './launchbox.controller';
 import { LaunchboxService } from './launchbox.service';
@@ -29,7 +30,7 @@ import { LaunchboxService } from './launchbox.service';
       IncentiveAction,
       IncentiveChannel,
       LeaderboardParticipant,
-
+      TokenConfiguredAction
     ]),
     CloudinaryModule,
     FarcasterModule,

@@ -8,8 +8,8 @@ import {
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { v4 as uuidv4 } from 'uuid';
 import { Chain, Social } from '../interfaces/launchbox.interface';
-
 @Entity({
   name: 'launchbox_tokens',
 })
@@ -281,6 +281,9 @@ export class LeaderboardParticipant {
   @Column()
   leaderboard_id: string;
 
+  @Column()
+  farcaster_username: string
+
   @CreateDateColumn()
   created_at: Date;
 
@@ -288,6 +291,13 @@ export class LeaderboardParticipant {
   updated_at: Date;
 
   @Column()
-  completed_actions: TokenConfiguredAction[]
-}
+  completed_actions: string[]
 
+
+  constructor(leaderboard_id: string, username: string, address: string) {
+    this.id = uuidv4()
+    this.leaderboard_id = leaderboard_id
+    this.farcaster_username = username
+    this.associated_address = address
+  }
+}

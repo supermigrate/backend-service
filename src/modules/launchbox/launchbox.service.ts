@@ -4,7 +4,7 @@ import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
-import { MongoRepository } from 'typeorm';
+import { In, MongoRepository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import validator from 'validator';
 import { env } from '../../common/config/env';
@@ -19,6 +19,7 @@ import {
   ChainDto,
   CreateDto,
   PaginateDto,
+  PlayDTO,
   RankingPaginateDto,
   SocialDto,
   UpdateDto
@@ -58,7 +59,11 @@ export class LaunchboxService {
     private readonly incentiveChannelRespository: MongoRepository<IncentiveChannel>,
 
     @InjectRepository(LeaderboardParticipant)
-    private readonly leaderboardParticipantRepository: MongoRepository<LeaderboardParticipant>
+    private readonly leaderboardParticipantRepository: MongoRepository<LeaderboardParticipant>,
+
+
+    @InjectRepository(TokenConfiguredAction)
+    private readonly tokenConfiguredActionRepository: MongoRepository<TokenConfiguredAction>
   ) { }
 
 
@@ -838,7 +843,66 @@ export class LaunchboxService {
     }
   }
 
-  // fix this function to get a user's rank by their wallet address
+
+  async earnPoints(token_id: string, user: PlayDTO): Promise<IResponse | ServiceError> {
+    try {
+      const lbToken = await this.launchboxTokenRepository.findOne({
+        where: {
+          id: token_id
+        }
+      });
+
+      if (!lbToken) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+
+      let leaderboard = await this.leaderboardRepository.findOne({
+        where: {
+          token_id
+        }
+      });
+
+
+      if (!leaderboard) {
+        throw new ServiceError('Leaderboard not active for token', HttpStatus.NOT_FOUND);
+      }
+
+      let rank = await this.leaderboardParticipantRepository.findOne({
+        where: {
+          leaderboard_id: leaderboard.id,
+          associated_address: user.associated_address
+        }
+      })
+
+      if (!rank) {
+        const { associated_address, farcaster_username } = user
+        rank = new LeaderboardParticipant(leaderboard.id, farcaster_username, associated_address)
+        await this.leaderboardParticipantRepository.save(rank)
+      }
+
+      return successResponse({
+        status: true,
+        message: 'Rank fetched successfully',
+        data: { rank },
+      })
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the rank.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the rank. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
   async getRank(address: string, token_id: string): Promise<IResponse | ServiceError> {
     try {
       const participant = await this.leaderboardParticipantRepository.findOne({
@@ -863,18 +927,31 @@ export class LaunchboxService {
         throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
       }
 
-      const sortedParticipants = leaderboard.participants.sort((a, b) => {
-        const aPoints = a.completed_actions.reduce((acc, action) => acc + action.points, 0);
-        const bPoints = b.completed_actions.reduce((acc, action) => acc + action.points, 0);
-        return bPoints - aPoints;
-      });
+      const completedActionIds = participant.completed_actions;
+      const completedActions = await this.tokenConfiguredActionRepository.findBy({ id: In(completedActionIds) });
+      const participantPoints = completedActions.reduce((acc, action) => acc + action.points, 0);
+
+
+      const sortedParticipants = await Promise.all(
+        leaderboard.participants.map(async (p) => {
+          const actionIds = p.completed_actions;
+          const actions = await this.tokenConfiguredActionRepository.findBy({ id: In(actionIds) });
+          const points = actions.reduce((acc, action) => acc + action.points, 0);
+          return { ...p, points };
+        })
+      );
+
+      sortedParticipants.sort((a, b) => b.points - a.points);
 
       const rank = sortedParticipants.findIndex(p => p.associated_address === address) + 1;
 
       return successResponse({
         status: true,
         message: 'Rank fetched successfully',
-        data: { rank },
+        data: {
+          total_points: participantPoints,
+          rank: rank
+        },
       });
     } catch (error) {
       this.logger.error(
@@ -893,8 +970,8 @@ export class LaunchboxService {
     }
   }
 
-  // get full paginated leader board, format 
-  async getRanking(token_id: string, paginate: RankingPaginateDto): Promise<IResponse | ServiceError> {
+
+  async getAllRanking(token_id: string, paginate: RankingPaginateDto): Promise<IResponse | ServiceError> {
     try {
       const leaderboard = await this.leaderboardRepository.findOne({
         where: {
@@ -907,19 +984,33 @@ export class LaunchboxService {
         throw new ServiceError('Leaderboard not found', HttpStatus.NOT_FOUND);
       }
 
-      const sortedParticipants = leaderboard.participants.sort((a, b) => {
-        const aPoints = a.completed_actions.reduce((acc, action) => acc + action.points, 0);
-        const bPoints = b.completed_actions.reduce((acc, action) => acc + action.points, 0);
-        return bPoints - aPoints;
-      });
+      const sortedParticipants = await Promise.all(
+        leaderboard.participants.map(async (p) => {
+          const actionIds = p.completed_actions;
+          const actions = await this.tokenConfiguredActionRepository.findByIds(actionIds);
+          const points = actions.reduce((acc, action) => acc + action.points, 0);
+          return { ...p, points };
+        })
+      );
 
-      const paginatedParticipants = sortedParticipants.slice((paginate.page - 1) * paginate.limit, paginate.page * paginate.limit);
+
+      const ranking = sortedParticipants.map((p, i) => {
+        return {
+          points: p.points,
+          address: p.associated_address,
+          created_at: p.created_at,
+          farcaster_username: p.farcaster_username
+        }
+      }).sort((a, b) => b.points - a.points);
+
+
+      const paginatedParticipants = ranking.slice((paginate.page - 1) * paginate.limit, paginate.page * paginate.limit);
 
       return successResponse({
         status: true,
         message: 'Ranking fetched successfully',
         data: {
-          participants: paginatedParticipants,
+          ranking: paginatedParticipants,
           total: sortedParticipants.length
         },
       });
@@ -939,6 +1030,7 @@ export class LaunchboxService {
       ).toErrorResponse();
     }
   }
+
 
   async addIncentiveAction(token_id: string, action: ActionDTO): Promise<IResponse | ServiceError> {
     try {

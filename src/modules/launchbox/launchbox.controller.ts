@@ -22,7 +22,7 @@ import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
 import { FileMimes } from '../../common/enums/index.enum';
 import { ErrorResponse } from '../../common/responses';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
-import { ActionDTO, CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
+import { ActionDTO, PlayDTO, RankingPaginateDto } from './dtos/launchbox.dto';
 import { LaunchboxService } from './launchbox.service';
 
 @ApiTags('Launchbox')
@@ -259,7 +259,6 @@ export class LaunchboxController {
   }
 
 
-
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Get System default incentive channels',
@@ -270,5 +269,24 @@ export class LaunchboxController {
   }
 
 
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Participate in activities to earn points',
+  })
+  @Post("/tokens/:id/earn")
+  async earnPoints(@Param('id') id: string, @Body() body: PlayDTO) {
+    return this.launchboxService.earnPoints(id, body)
+  }
+
+
+  @Get("/tokens/:id/rank")
+  async getWalletRank(@Param('id') id: string, @Query("adddress") user_address: string) {
+    return this.launchboxService.getRank(user_address, id)
+  }
+
+  @Get("/tokens/:id/leaderboard")
+  async getTokenLeaderboard(@Param("id") id: string, @Query() query: RankingPaginateDto) {
+    return this.launchboxService.getAllRanking(id, query)
+  }
 
 }

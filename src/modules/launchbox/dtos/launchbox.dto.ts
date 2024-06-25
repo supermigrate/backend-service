@@ -11,7 +11,6 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-import { Transform, Type } from 'class-transformer';
 
 
 export class SocialDto {
@@ -175,4 +174,16 @@ export class ActionDTO {
   @IsNotEmpty()
   id: string
 
+}
+
+
+export class PlayDTO {
+  @IsNotEmpty()
+  @IsEthereumAddress()
+  @Transform(({ value }) => value.trim())
+  associated_address: string;
+
+
+  @IsNotEmpty()
+  farcaster_username: string
 }

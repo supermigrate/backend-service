@@ -151,8 +151,6 @@ export class LaunchboxService {
         data: updatedToken,
       });
     } catch (error) {
-      console.log(error);
-
       this.logger.error('An error occurred while updating the token.', error);
 
       if (error instanceof ServiceError) {
@@ -168,7 +166,9 @@ export class LaunchboxService {
 
   async findAll(query: PaginateDto): Promise<IResponse | ServiceError> {
     try {
-      const totalTokens = await this.launchboxTokenRepository.count();
+      const totalTokens = await this.launchboxTokenRepository.count({
+        is_active: true,
+      });
 
       let queryOptions = {};
 
@@ -200,11 +200,11 @@ export class LaunchboxService {
 
       const launchboxTokens = await this.launchboxTokenRepository.find({
         where: queryOptions,
-        skip: Number(query.skip),
-        take: Number(query.take),
         order: {
           created_at: 'DESC',
         },
+        skip: Number(query.skip),
+        take: Number(query.take),
       });
 
       return successResponse({
@@ -278,17 +278,18 @@ export class LaunchboxService {
       }
 
       const holdersCount = await this.launchboxTokenHolderRepository.count({
-        where: {
-          token_id: id,
-        },
+        token_id: token.id,
       });
 
       const holders = await this.launchboxTokenHolderRepository.find({
         where: {
           token_id: id,
-          skip: Number(query.skip),
-          take: Number(query.take),
         },
+        order: {
+          balance: 'DESC',
+        },
+        skip: Number(query.skip),
+        take: Number(query.take),
       });
 
       return successResponse({
@@ -374,17 +375,18 @@ export class LaunchboxService {
 
       const transactionsCount =
         await this.launchboxTokenTransactionRepository.count({
-          where: {
-            token_id: id,
-          },
+          token_id: id,
         });
 
       const transactions = await this.launchboxTokenTransactionRepository.find({
         where: {
           token_id: id,
-          skip: Number(query.skip),
-          take: Number(query.take),
         },
+        order: {
+          created_at: 'DESC',
+        },
+        skip: Number(query.skip),
+        take: Number(query.take),
       });
 
       return successResponse({
@@ -520,7 +522,7 @@ export class LaunchboxService {
         const holderEntries = Object.entries(holders);
 
         for (const [address, { balance, blockNumber }] of holderEntries) {
-          if (balance.eq(0)) {
+          if (balance.eq(0) || balance.lt(0)) {
             await this.launchboxTokenHolderRepository.deleteOne({
               where: { address, token_id: token.id },
             });
@@ -590,7 +592,7 @@ export class LaunchboxService {
           });
 
         const transactions = await this.contractService.getTokenTransactions(
-          token.token_address,
+          token.exchange_address,
           tokenTransactions?.block_number ?? token.chain.block_number ?? 0,
         );
 

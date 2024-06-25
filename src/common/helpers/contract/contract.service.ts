@@ -1,14 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import * as NftAbi from './abis/Nft.json';
 import { env } from '../../config/env';
 import { Holder, Transaction } from './interfaces/contract.interface';
 
+const BASE_BATCH_SIZE = 3000;
 @Injectable()
 export class ContractService {
   private httpsProviders: {
     [key: string]: ethers.providers.JsonRpcProvider;
   } = {};
+
+  private readonly Logger = new Logger(ContractService.name);
 
   getProvider(): ethers.providers.JsonRpcProvider {
     if (!this.httpsProviders[env.blockchain.rpcUrl]) {
@@ -54,7 +57,7 @@ export class ContractService {
 
     const contract = new ethers.Contract(contractAddress, ABI, provider);
 
-    const batchSize = 10000;
+    const batchSize = BASE_BATCH_SIZE;
     const latestBlock = await provider.getBlockNumber();
     const holders: Holder = {};
 
@@ -65,6 +68,7 @@ export class ContractService {
     ) {
       const endBlock = Math.min(startBlock + batchSize - 1, latestBlock);
       const filter = contract.filters.Transfer();
+
       try {
         const events = await contract.queryFilter(filter, startBlock, endBlock);
 
@@ -100,11 +104,14 @@ export class ContractService {
             };
           }
         });
-
-        return holders;
       } catch (error) {
-        return holders;
+        this.Logger.error(
+          `[ContractService] => GetTokenHolders error occurred`,
+          error.stack,
+        );
       }
+
+      return holders;
     }
   }
 
@@ -120,7 +127,7 @@ export class ContractService {
     ];
 
     const contract = new ethers.Contract(contractAddress, ABI, provider);
-    const batchSize = 10000;
+    const batchSize = BASE_BATCH_SIZE;
     const latestBlock = await provider.getBlockNumber();
     const transactions: Transaction[] = [];
 
@@ -178,11 +185,14 @@ export class ContractService {
             blockNumber: event.blockNumber,
           });
         });
-
-        return transactions;
       } catch (error) {
-        return transactions;
+        this.Logger.error(
+          `[ContractService] => GetTokenTransactions error occurred`,
+          error.stack,
+        );
       }
     }
+
+    return transactions;
   }
 }

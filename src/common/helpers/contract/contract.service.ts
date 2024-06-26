@@ -195,4 +195,28 @@ export class ContractService {
 
     return transactions;
   }
+
+  async getTokenPriceAndMarketCap(contractAddress: string): Promise<{
+    priceEth: string;
+    marketCapEth: string;
+  }> {
+    const ABI = [
+      'function marketCap() external view returns (uint256)',
+      'function getTokenPriceinETH() external view returns (uint256 ethAmount)',
+    ];
+
+    const contract = new ethers.Contract(
+      contractAddress,
+      ABI,
+      this.getProvider(),
+    );
+
+    const marketCap = await contract.marketCap();
+    const price = await contract.getTokenPriceinETH();
+
+    return {
+      priceEth: ethers.utils.formatEther(price),
+      marketCapEth: ethers.utils.formatEther(marketCap),
+    };
+  }
 }

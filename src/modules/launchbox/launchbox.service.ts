@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import validator from 'validator';
 import { MongoRepository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ethers } from 'ethers';
 import {
   LaunchboxToken,
   LaunchboxTokenHolder,
@@ -26,6 +27,7 @@ import { Chain } from './interfaces/launchbox.interface';
 import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
 import { env } from '../../common/config/env';
 import { ContractService } from '../../common/helpers/contract/contract.service';
+import { Currency } from './enums/launchbox.enum';
 
 @Injectable()
 export class LaunchboxService {
@@ -166,7 +168,7 @@ export class LaunchboxService {
 
   async findAll(query: PaginateDto): Promise<IResponse | ServiceError> {
     try {
-      const totalTokens = await this.launchboxTokenRepository.count({
+      const totalTokensCount = await this.launchboxTokenRepository.count({
         is_active: true,
       });
 
@@ -207,14 +209,33 @@ export class LaunchboxService {
         take: Number(query.take),
       });
 
+      const formattedTokensPromises = launchboxTokens.map(async (token) => {
+        const transactionData = await this.getMoreTransactionData(
+          token.id,
+          token.exchange_address,
+        );
+
+        return {
+          ...token,
+          _id: undefined,
+          price: transactionData.price,
+          market_cap: transactionData.marketCap,
+          volume: transactionData.volume,
+          total_sell_count: transactionData.totalSellCount,
+          total_buy_count: transactionData.totalBuyCount,
+        };
+      });
+
+      const formattedTokens = await Promise.all(formattedTokensPromises);
+
       return successResponse({
         status: true,
         message: 'Tokens fetched successfully',
-        data: launchboxTokens,
+        data: formattedTokens,
         meta: {
           take: Number(query.take),
           skip: Number(query.skip),
-          totalCount: totalTokens,
+          total_count: totalTokensCount,
         },
       });
     } catch (error) {
@@ -237,18 +258,31 @@ export class LaunchboxService {
   async findOne(reference: string): Promise<IResponse | ServiceError> {
     try {
       const isUuid = validator.isUUID(reference);
-      const launchbox = await this.launchboxTokenRepository.findOne({
+      const launchboxToken = await this.launchboxTokenRepository.findOne({
         where: isUuid ? { id: reference } : { token_address: reference },
       });
 
-      if (!launchbox) {
+      if (!launchboxToken) {
         throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
       }
+
+      const transactionData = await this.getMoreTransactionData(
+        launchboxToken.id,
+        launchboxToken.exchange_address,
+      );
 
       return successResponse({
         status: true,
         message: 'Token fetched successfully',
-        data: launchbox,
+        data: {
+          ...launchboxToken,
+          _id: undefined,
+          price: transactionData.price,
+          market_cap: transactionData.marketCap,
+          volume: transactionData.volume,
+          total_sell_count: transactionData.totalSellCount,
+          total_buy_count: transactionData.totalBuyCount,
+        },
       });
     } catch (error) {
       this.logger.error('An error occurred while fetching the token.', error);
@@ -269,6 +303,9 @@ export class LaunchboxService {
     id: string,
   ): Promise<IResponse | ServiceError> {
     try {
+      const take = Number(query.take);
+      const skip = Number(query.skip);
+
       const token = await this.launchboxTokenRepository.findOne({
         where: { id },
       });
@@ -281,25 +318,42 @@ export class LaunchboxService {
         token_id: token.id,
       });
 
-      const holders = await this.launchboxTokenHolderRepository.find({
-        where: {
-          token_id: id,
+      const pipeline = [
+        { $match: { token_id: id } },
+        {
+          $addFields: {
+            balance: { $toDouble: '$balance' },
+          },
         },
-        order: {
-          balance: 'DESC',
+        { $sort: { balance: -1 } },
+        { $skip: skip },
+        { $limit: take },
+        {
+          $project: {
+            _id: 0,
+            id: 1,
+            address: 1,
+            balance: 1,
+            block_number: 1,
+            token_id: 1,
+            created_at: 1,
+            updated_at: 1,
+          },
         },
-        skip: Number(query.skip),
-        take: Number(query.take),
-      });
+      ];
+
+      const holders = await this.launchboxTokenHolderRepository
+        .aggregate(pipeline)
+        .toArray();
 
       return successResponse({
         status: true,
         message: 'Token holders fetched successfully',
         data: holders,
         meta: {
-          take: Number(query.take),
-          skip: Number(query.skip),
-          totalCount: holdersCount,
+          take,
+          skip,
+          total_count: holdersCount,
         },
       });
     } catch (error) {
@@ -378,18 +432,6 @@ export class LaunchboxService {
           token_id: id,
         });
 
-      const totalSellCount =
-        await this.launchboxTokenTransactionRepository.count({
-          token_id: id,
-          type: 'sell',
-        });
-
-      const totalBuyCount =
-        await this.launchboxTokenTransactionRepository.count({
-          token_id: id,
-          type: 'sell',
-        });
-
       const transactions = await this.launchboxTokenTransactionRepository.find({
         where: {
           token_id: id,
@@ -408,9 +450,7 @@ export class LaunchboxService {
         meta: {
           take: Number(query.take),
           skip: Number(query.skip),
-          totalCount: transactionsCount,
-          totalSellCount: totalSellCount,
-          totalBuyCount: totalBuyCount,
+          total_count: transactionsCount,
         },
       });
     } catch (error) {
@@ -473,28 +513,14 @@ export class LaunchboxService {
     }
   }
 
-  async getCoinPrice({
-    coin,
-    currency,
-  }: {
-    coin: string;
-    currency: string;
-  }): Promise<IResponse | ServiceError> {
+  async getCoinPrice(coin: string): Promise<IResponse | ServiceError> {
     try {
-      const response = await this.httpService.axiosRef.get(
-        `${env.coingecko.url}/coins/markets?vs_currency=${currency}&ids=${coin}`,
-      );
+      const response = await this._getCoinPrice(coin);
 
       return successResponse({
         status: true,
         message: 'Get current coin price',
-        data: {
-          name: response.data[0].name,
-          symbol: response.data[0].symbol,
-          price: response.data[0].current_price,
-          currency,
-          last_updated: response.data[0].last_updated,
-        },
+        data: response,
       });
     } catch (error) {
       this.logger.error('An error occurred while fetching the price.', error);
@@ -507,6 +533,35 @@ export class LaunchboxService {
         'An error occurred while fetching the price. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
+    }
+  }
+
+  private async _getCoinPrice(coin: string): Promise<{
+    name: string;
+    symbol: string;
+    price: number;
+    currency: string;
+    last_updated: string;
+  }> {
+    try {
+      const response = await this.httpService.axiosRef.get(
+        `${env.coingecko.url}/coins/markets?vs_currency=${Currency.USD}&ids=${coin}`,
+      );
+
+      return {
+        name: response.data[0].name,
+        symbol: response.data[0].symbol,
+        price: response.data[0].current_price,
+        currency: Currency.USD,
+        last_updated: response.data[0].last_updated,
+      };
+    } catch (error) {
+      this.logger.error('An error occurred while fetching the price.', error);
+
+      throw new ServiceError(
+        'An error occurred while fetching the price. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -545,19 +600,24 @@ export class LaunchboxService {
               where: { address, token_id: token.id },
             });
 
+            const convertedBalance = ethers.utils.formatUnits(
+              balance,
+              token.token_decimals,
+            );
+
             if (holder) {
               await this.launchboxTokenHolderRepository.updateOne(
                 { token_id: token.id, address },
                 {
                   $set: {
-                    balance: balance.toString(),
+                    balance: convertedBalance.toString(),
                   },
                 },
               );
             } else {
               const newHolder = this.launchboxTokenHolderRepository.create({
                 id: uuidv4(),
-                balance: balance.toString(),
+                balance: convertedBalance.toString(),
                 address,
                 block_number: blockNumber,
                 token_id: token.id,
@@ -615,13 +675,32 @@ export class LaunchboxService {
         }
 
         for (const transaction of transactions) {
+          const existingTransaction =
+            await this.launchboxTokenTransactionRepository.findOne({
+              where: {
+                transaction_hash: transaction.transactionHash,
+                token_id: token.id,
+              },
+            });
+
+          if (existingTransaction) {
+            continue;
+          }
+
+          const ethValue = ethers.utils.formatEther(transaction.ethValue);
+          const tokenValue = ethers.utils.formatUnits(
+            transaction.tokenValue,
+            token.token_decimals,
+          );
+          const feeValue = ethers.utils.formatEther(transaction.fee);
+
           const newTransaction =
             this.launchboxTokenTransactionRepository.create({
               id: uuidv4(),
               address: transaction.address,
-              token_value: transaction.tokenValue,
-              eth_value: transaction.ethValue,
-              fee: transaction.fee,
+              token_value: tokenValue.toString(),
+              eth_value: ethValue.toString(),
+              fee: feeValue.toString(),
               type: transaction.type,
               transaction_hash: transaction.transactionHash,
               block_number: transaction.blockNumber,
@@ -683,5 +762,67 @@ export class LaunchboxService {
 
       throw new ServiceError(errorMessage, HttpStatus.BAD_REQUEST);
     }
+  }
+
+  private async getMoreTransactionData(
+    tokenId: string,
+    exchangeAddress: string,
+  ) {
+    const pipeline = [
+      {
+        $match: {
+          token_id: tokenId,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: {
+              $toDouble: '$eth_value',
+            },
+          },
+        },
+      },
+    ];
+
+    const [
+      totalSellCount,
+      totalBuyCount,
+      resultVolume,
+      { priceEth, marketCapEth },
+    ] = await Promise.all([
+      this.launchboxTokenTransactionRepository.count({
+        token_id: tokenId,
+        type: 'sell',
+      }),
+      this.launchboxTokenTransactionRepository.count({
+        token_id: tokenId,
+        type: 'buy',
+      }),
+      this.launchboxTokenTransactionRepository.aggregate(pipeline).toArray(),
+      this.contractService.getTokenPriceAndMarketCap(exchangeAddress),
+    ]);
+
+    const volumeEth = (
+      resultVolume[0] as unknown as {
+        total: number;
+      }
+    ).total;
+
+    const ethPriceResult = await this._getCoinPrice(Currency.ETHEREUM);
+    const ethPriceUSD = ethPriceResult.price;
+
+    const volume = volumeEth * ethPriceUSD;
+    const price = parseFloat(priceEth) * ethPriceUSD;
+    const marketCap = parseFloat(marketCapEth) * ethPriceUSD;
+
+    return {
+      totalSellCount,
+      totalBuyCount,
+      volume: volume,
+      price,
+      marketCap: marketCap,
+    };
   }
 }

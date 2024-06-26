@@ -210,11 +210,10 @@ export class LaunchboxController {
     type: ErrorResponse,
   })
   @Get('/price')
-  async getPrice(@Query() query: { coin: string; currency: string }) {
-    query.currency = query.currency || 'usd';
+  async getPrice(@Query() query: { coin: string }) {
     query.coin = query.coin || 'ethereum';
 
-    return this.launchboxService.getCoinPrice(query);
+    return this.launchboxService.getCoinPrice(query.coin);
   }
 
   @Get('tokens/holders/seed')

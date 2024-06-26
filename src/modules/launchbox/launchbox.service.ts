@@ -800,7 +800,7 @@ export class LaunchboxService {
       totalSellCount,
       totalBuyCount,
       resultVolume,
-      { priceEth, marketCapEth },
+      { priceEth, marketCapUsd },
     ] = await Promise.all([
       this.launchboxTokenTransactionRepository.count({
         token_id: tokenId,
@@ -825,14 +825,13 @@ export class LaunchboxService {
 
     const volume = volumeEth * ethPriceUSD;
     const price = parseFloat(priceEth) * ethPriceUSD;
-    const marketCap = parseFloat(marketCapEth) * ethPriceUSD;
 
     return {
       totalSellCount,
       totalBuyCount,
       volume: volume,
       price,
-      marketCap: marketCap,
+      marketCap: parseFloat(marketCapUsd),
     };
   }
 }

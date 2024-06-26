@@ -27,7 +27,7 @@ import { Chain } from './interfaces/launchbox.interface';
 import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
 import { env } from '../../common/config/env';
 import { ContractService } from '../../common/helpers/contract/contract.service';
-import { Currency } from './enums/launchbox.enum';
+import { Currency, TransactionType } from './enums/launchbox.enum';
 
 @Injectable()
 export class LaunchboxService {
@@ -692,7 +692,17 @@ export class LaunchboxService {
             transaction.tokenValue,
             token.token_decimals,
           );
-          const feeValue = ethers.utils.formatEther(transaction.fee);
+
+          let feeValue: string = '0';
+
+          if (transaction.type === TransactionType.Buy) {
+            feeValue = ethers.utils.formatEther(transaction.fee);
+          } else {
+            feeValue = ethers.utils.formatUnits(
+              transaction.fee,
+              token.token_decimals,
+            );
+          }
 
           const newTransaction =
             this.launchboxTokenTransactionRepository.create({

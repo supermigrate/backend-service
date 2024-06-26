@@ -9,6 +9,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Chain, Social } from '../interfaces/launchbox.interface';
+import { TransactionType } from '../enums/launchbox.enum';
 
 @Entity({
   name: 'launchbox_tokens',
@@ -126,7 +127,7 @@ export class LaunchboxTokenTransaction {
   fee: string;
 
   @Column()
-  type: string;
+  type: TransactionType;
 
   @Column()
   transaction_hash: string;

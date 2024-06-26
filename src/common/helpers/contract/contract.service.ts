@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import * as NftAbi from './abis/Nft.json';
 import { env } from '../../config/env';
 import { Holder, Transaction } from './interfaces/contract.interface';
+import { TransactionType } from '../../../modules/launchbox/enums/launchbox.enum';
 
 const BASE_BATCH_SIZE = 3000;
 @Injectable()
@@ -164,7 +165,7 @@ export class ContractService {
             tokenValue: tokenOut.toString(),
             ethValue: ethIn.toString(),
             fee: fee.toString(),
-            type: 'buy',
+            type: TransactionType.Buy,
             transactionHash: event.transactionHash,
             blockNumber: event.blockNumber,
           });
@@ -181,7 +182,7 @@ export class ContractService {
             tokenValue: tokenIn.toString(),
             ethValue: ethOut.toString(),
             fee: fee.toString(),
-            type: 'sell',
+            type: TransactionType.Sell,
             transactionHash: event.transactionHash,
             blockNumber: event.blockNumber,
           });

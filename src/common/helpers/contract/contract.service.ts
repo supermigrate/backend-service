@@ -82,7 +82,7 @@ export class ContractService {
           if (holders[from]) {
             holders[from].balance = holders[from].balance.sub(value);
             holders[from].blockNumber = event.blockNumber;
-            if (holders[from].balance.eq(0)) {
+            if (holders[from].balance.eq(0) || holders[from].balance.lt(0)) {
               holders[from] = {
                 balance: ethers.BigNumber.from(0),
                 blockNumber: event.blockNumber,
@@ -94,12 +94,13 @@ export class ContractService {
               blockNumber: event.blockNumber,
             };
           }
+
           if (holders[to]) {
             holders[to].balance = holders[to].balance.add(value);
             holders[to].blockNumber = event.blockNumber;
           } else {
             holders[to] = {
-              balance: value,
+              balance: ethers.BigNumber.from(value),
               blockNumber: event.blockNumber,
             };
           }

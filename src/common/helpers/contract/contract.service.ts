@@ -200,7 +200,7 @@ export class ContractService {
 
   async getTokenPriceAndMarketCap(contractAddress: string): Promise<{
     priceEth: string;
-    marketCapEth: string;
+    marketCapUsd: string;
   }> {
     const ABI = [
       'function marketCap() external view returns (uint256)',
@@ -218,7 +218,7 @@ export class ContractService {
 
     return {
       priceEth: ethers.utils.formatEther(price),
-      marketCapEth: ethers.utils.formatEther(marketCap),
+      marketCapUsd: ethers.utils.formatEther(marketCap),
     };
   }
 }

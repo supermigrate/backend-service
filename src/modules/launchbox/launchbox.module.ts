@@ -11,6 +11,7 @@ import {
 import { CloudinaryModule } from '../../common/helpers/cloudinary/cloudinary.module';
 import { FarcasterModule } from '../../common/helpers/farcaster/farcaster.module';
 import { ContractModule } from '../../common/helpers/contract/contract.module';
+import { SharedModule } from '../../common/helpers/shared/shared.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ContractModule } from '../../common/helpers/contract/contract.module';
     FarcasterModule,
     HttpModule,
     ContractModule,
+    SharedModule,
   ],
   providers: [LaunchboxService],
   controllers: [LaunchboxController],

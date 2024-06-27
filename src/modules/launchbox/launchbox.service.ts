@@ -812,16 +812,11 @@ export class LaunchboxService {
       }
     ).total;
 
-    const ethPriceUSD = await this.getEthPriceInUsd();
-
-    const volume = volumeEth * ethPriceUSD;
-    const price = parseFloat(priceEth) * ethPriceUSD;
-
     return {
       totalSellCount,
       totalBuyCount,
-      volume: volume,
-      price,
+      volume: volumeEth,
+      price: parseFloat(priceEth),
       marketCap: parseFloat(marketCapUsd),
     };
   }

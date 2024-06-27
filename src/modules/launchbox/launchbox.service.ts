@@ -25,9 +25,9 @@ import { IResponse } from '../../common/interfaces/response.interface';
 import { successResponse } from '../../common/responses/success.helper';
 import { Chain } from './interfaces/launchbox.interface';
 import { FarcasterService } from '../../common/helpers/farcaster/farcaster.service';
-import { env } from '../../common/config/env';
 import { ContractService } from '../../common/helpers/contract/contract.service';
 import { Currency, TransactionType } from './enums/launchbox.enum';
+import { SharedService } from '../../common/helpers/shared/shared.service';
 
 @Injectable()
 export class LaunchboxService {
@@ -42,6 +42,7 @@ export class LaunchboxService {
     private readonly farcasterService: FarcasterService,
     private readonly httpService: HttpService,
     private readonly contractService: ContractService,
+    private readonly sharedService: SharedService,
   ) {}
 
   private logger = new Logger(LaunchboxService.name);
@@ -513,14 +514,19 @@ export class LaunchboxService {
     }
   }
 
-  async getCoinPrice(coin: string): Promise<IResponse | ServiceError> {
+  async getCoinPrice(): Promise<IResponse | ServiceError> {
     try {
-      const response = await this._getCoinPrice(coin);
+      const price = await this.getEthPriceInUsd();
 
       return successResponse({
         status: true,
         message: 'Get current coin price',
-        data: response,
+        data: {
+          name: 'Ethereum',
+          symbol: 'ETH',
+          price,
+          currency: Currency.USD,
+        },
       });
     } catch (error) {
       this.logger.error('An error occurred while fetching the price.', error);
@@ -536,25 +542,11 @@ export class LaunchboxService {
     }
   }
 
-  private async _getCoinPrice(coin: string): Promise<{
-    name: string;
-    symbol: string;
-    price: number;
-    currency: string;
-    last_updated: string;
-  }> {
+  private async getEthPriceInUsd(): Promise<number> {
     try {
-      const response = await this.httpService.axiosRef.get(
-        `${env.coingecko.url}/coins/markets?vs_currency=${Currency.USD}&ids=${coin}`,
-      );
+      const ethPrice = await this.sharedService.getEthPriceInUsd();
 
-      return {
-        name: response.data[0].name,
-        symbol: response.data[0].symbol,
-        price: response.data[0].current_price,
-        currency: Currency.USD,
-        last_updated: response.data[0].last_updated,
-      };
+      return ethPrice;
     } catch (error) {
       this.logger.error('An error occurred while fetching the price.', error);
 
@@ -820,8 +812,7 @@ export class LaunchboxService {
       }
     ).total;
 
-    const ethPriceResult = await this._getCoinPrice(Currency.ETHEREUM);
-    const ethPriceUSD = ethPriceResult.price;
+    const ethPriceUSD = await this.getEthPriceInUsd();
 
     const volume = volumeEth * ethPriceUSD;
     const price = parseFloat(priceEth) * ethPriceUSD;

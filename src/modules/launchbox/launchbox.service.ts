@@ -210,10 +210,13 @@ export class LaunchboxService {
         take: Number(query.take),
       });
 
+      const ethPriceUSD = await this.getEthPriceInUsd();
+
       const formattedTokensPromises = launchboxTokens.map(async (token) => {
         const transactionData = await this.getMoreTransactionData(
           token.id,
           token.exchange_address,
+          ethPriceUSD,
         );
 
         return {
@@ -769,6 +772,7 @@ export class LaunchboxService {
   private async getMoreTransactionData(
     tokenId: string,
     exchangeAddress: string,
+    ethPriceUSD: number = 0,
   ) {
     const pipeline = [
       {
@@ -812,11 +816,14 @@ export class LaunchboxService {
       }
     ).total;
 
+    const volume = volumeEth * ethPriceUSD;
+    const price = parseFloat(priceEth) * ethPriceUSD;
+
     return {
       totalSellCount,
       totalBuyCount,
-      volume: volumeEth,
-      price: parseFloat(priceEth),
+      volume: volume,
+      price,
       marketCap: parseFloat(marketCapUsd),
     };
   }

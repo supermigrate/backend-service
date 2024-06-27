@@ -21,6 +21,7 @@ import { EarnModule } from './modules/earn/earn.module';
 import { ContractModule } from './common/helpers/contract/contract.module';
 import { LaunchboxModule } from './modules/launchbox/launchbox.module';
 import { FarcasterModule } from './common/helpers/farcaster/farcaster.module';
+import { SharedModule } from './common/helpers/shared/shared.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -50,6 +51,7 @@ const envPath = getEnvPath();
     ContractModule,
     LaunchboxModule,
     FarcasterModule,
+    SharedModule,
   ],
   controllers: [AppController],
   providers: [

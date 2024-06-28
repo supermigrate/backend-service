@@ -31,4 +31,28 @@ export class FarcasterService {
       return [];
     }
   }
+
+  async getNumberOfWeeklyCasts(channelUrl: string) {
+    try {
+      return await this.launchbox.getNumberOfWeeklyCasts(channelUrl);
+    } catch (error) {
+      return 0;
+    }
+  }
+
+  async getSocialCapitalNumber(
+    channelName: string,
+    chain: string,
+    tokenAddress: string,
+  ) {
+    try {
+      return await this.launchbox.getChannelSocialCapital(
+        channelName,
+        chain,
+        tokenAddress as `0x${string}`,
+      );
+    } catch (error) {
+      return 0;
+    }
+  }
 }

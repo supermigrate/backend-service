@@ -47,6 +47,40 @@ export class LaunchboxService {
 
   private logger = new Logger(LaunchboxService.name);
 
+  async init() {
+    const tokens = await this.launchboxTokenRepository.find({
+      is_active: true,
+    });
+
+    tokens.forEach((token) => {
+      this.tokenHoldersListener(token);
+      this.tokenTransactionsListener(token);
+    });
+
+    const [latestTransaction, latestHolder] = await Promise.all([
+      this.launchboxTokenTransactionRepository.findOne({
+        order: { block_number: 'DESC' },
+      }),
+      this.launchboxTokenHolderRepository.findOne({
+        order: { block_number: 'DESC' },
+      }),
+    ]);
+
+    await Promise.all(
+      tokens.map(async (token) => {
+        await this.seedTokenTransactions(
+          token,
+          latestTransaction?.block_number ?? token.chain.block_number,
+        );
+
+        await this.seedTokenHolders(
+          token,
+          latestHolder?.block_number ?? token.chain.block_number,
+        );
+      }),
+    );
+  }
+
   async create(
     body: CreateDto,
     file: Express.Multer.File,
@@ -215,14 +249,17 @@ export class LaunchboxService {
       const formattedTokensPromises = launchboxTokens.map(async (token) => {
         const transactionData = await this.getMoreTransactionData(
           token.id,
+          token.token_address,
           token.exchange_address,
           ethPriceUSD,
+          token.token_decimals,
         );
 
         return {
           ...token,
           _id: undefined,
           price: transactionData.price,
+          liquidity: transactionData.liquidity,
           market_cap: transactionData.marketCap,
           volume: transactionData.volume,
           total_sell_count: transactionData.totalSellCount,
@@ -270,9 +307,13 @@ export class LaunchboxService {
         throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
       }
 
+      const ethPriceUSD = await this.getEthPriceInUsd();
       const transactionData = await this.getMoreTransactionData(
         launchboxToken.id,
+        launchboxToken.token_address,
         launchboxToken.exchange_address,
+        ethPriceUSD,
+        launchboxToken.token_decimals,
       );
 
       return successResponse({
@@ -282,6 +323,7 @@ export class LaunchboxService {
           ...launchboxToken,
           _id: undefined,
           price: transactionData.price,
+          liquidity: transactionData.liquidity,
           market_cap: transactionData.marketCap,
           volume: transactionData.volume,
           total_sell_count: transactionData.totalSellCount,
@@ -395,11 +437,28 @@ export class LaunchboxService {
       const casts = await this.farcasterService.getChannelCasts(
         token.socials.warpcast.channel.url,
       );
+      let weeklyCasts = 0;
+      let socialCapital = 0;
+
+      if (token.socials?.warpcast?.channel?.url) {
+        weeklyCasts = await this.farcasterService.getNumberOfWeeklyCasts(
+          token.socials.warpcast.channel.url,
+        );
+        socialCapital = await this.farcasterService.getSocialCapitalNumber(
+          token.socials.warpcast.channel.name,
+          token.chain.name,
+          token.token_address,
+        );
+      }
 
       return successResponse({
         status: true,
         message: 'Token casts fetched successfully',
         data: casts,
+        meta: {
+          weekly_casts: weeklyCasts,
+          social_capital: socialCapital,
+        },
       });
     } catch (error) {
       this.logger.error(
@@ -560,181 +619,269 @@ export class LaunchboxService {
     }
   }
 
-  async seedTokenHolders(): Promise<IResponse | ServiceError> {
-    try {
-      const tokens = await this.launchboxTokenRepository.find();
+  async seedTokenTransactions(
+    token: LaunchboxToken,
+    blockNumber: number,
+  ): Promise<void> {
+    this.logger.log(
+      `Seeding token transactions of ${token.token_name} ${token.exchange_address}`,
+    );
 
-      for (const token of tokens) {
-        const tokenHolder = await this.launchboxTokenHolderRepository.findOne({
-          where: {
-            token_id: token.id,
-          },
-          order: {
-            block_number: 'DESC',
-          },
-        });
+    const contract = this.getContract(
+      token.exchange_address,
+      this.contractService.getExchangeEventsAbi(),
+    );
+    const buyEvents = await contract.queryFilter(
+      contract.filters.TokenBuy(),
+      blockNumber,
+    );
 
-        const holders = await this.contractService.getTokenHolders(
-          token.token_address,
-          tokenHolder?.block_number ?? token.chain.block_number ?? 0,
-        );
+    const sellEvents = await contract.queryFilter(
+      contract.filters.TokenSell(),
+      blockNumber,
+    );
 
-        if (!holders) {
-          continue;
-        }
-
-        const holderEntries = Object.entries(holders);
-
-        for (const [address, { balance, blockNumber }] of holderEntries) {
-          if (balance.eq(0) || balance.lt(0)) {
-            await this.launchboxTokenHolderRepository.deleteOne({
-              where: { address, token_id: token.id },
-            });
-          } else {
-            const holder = await this.launchboxTokenHolderRepository.findOne({
-              where: { address, token_id: token.id },
-            });
-
-            const convertedBalance = ethers.utils.formatUnits(
-              balance,
-              token.token_decimals,
-            );
-
-            if (holder) {
-              await this.launchboxTokenHolderRepository.updateOne(
-                { token_id: token.id, address },
-                {
-                  $set: {
-                    balance: convertedBalance.toString(),
-                  },
-                },
-              );
-            } else {
-              const newHolder = this.launchboxTokenHolderRepository.create({
-                id: uuidv4(),
-                balance: convertedBalance.toString(),
-                address,
-                block_number: blockNumber,
-                token_id: token.id,
-              });
-
-              await this.launchboxTokenHolderRepository.save(newHolder);
-            }
-          }
-        }
-      }
-
-      return successResponse({
-        status: true,
-        message: 'Tokens holders seeded successfully',
-      });
-    } catch (error) {
-      this.logger.error(
-        'An error occurred while seeding the token holders.',
-        error,
+    for (const event of buyEvents) {
+      await this.processTransactionEvent(
+        token,
+        event,
+        TransactionType.Buy,
+        blockNumber,
       );
+    }
 
-      if (error instanceof ServiceError) {
-        return error.toErrorResponse();
-      }
-
-      throw new ServiceError(
-        'An error occurred while seeding the token holders. Please try again later.',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      ).toErrorResponse();
+    for (const event of sellEvents) {
+      await this.processTransactionEvent(
+        token,
+        event,
+        TransactionType.Sell,
+        blockNumber,
+      );
     }
   }
 
-  async seedTokenTransactions(): Promise<IResponse | ServiceError> {
-    try {
-      const tokens = await this.launchboxTokenRepository.find();
+  async seedTokenHolders(
+    token: LaunchboxToken,
+    blockNumber: number,
+  ): Promise<void> {
+    this.logger.log(
+      `Seeding token holders of ${token.token_name} ${token.token_address}`,
+    );
 
-      for (const token of tokens) {
-        const tokenTransactions =
-          await this.launchboxTokenTransactionRepository.findOne({
-            where: {
-              token_id: token.id,
-            },
-            order: {
-              block_number: 'DESC',
-            },
-          });
+    const contract = this.getContract(
+      token.token_address,
+      this.contractService.getTokenTransferEventAbi(),
+    );
+    const events = await contract.queryFilter(
+      contract.filters.Transfer(),
+      blockNumber,
+    );
 
-        const transactions = await this.contractService.getTokenTransactions(
-          token.exchange_address,
-          tokenTransactions?.block_number ?? token.chain.block_number ?? 0,
+    for (const event of events) {
+      await this.processTransferEvent(token, event);
+    }
+  }
+
+  async tokenHoldersListener(token: LaunchboxToken): Promise<void> {
+    this.logger.log(
+      `Listening for token holders of ${token.token_name} ${token.token_address}`,
+    );
+
+    const contract = this.getContract(
+      token.token_address,
+      this.contractService.getTokenTransferEventAbi(),
+    );
+
+    contract.on(
+      'Transfer',
+      async (
+        _from: string,
+        _to: string,
+        _value: string,
+        event: ethers.Event,
+      ) => {
+        await this.processTransferEvent(token, event);
+      },
+    );
+  }
+
+  async tokenTransactionsListener(token: LaunchboxToken): Promise<void> {
+    this.logger.log(
+      `Listening for token transactions of ${token.token_name} ${token.exchange_address}`,
+    );
+
+    const contract = this.getContract(
+      token.exchange_address,
+      this.contractService.getExchangeEventsAbi(),
+    );
+
+    contract.on(
+      'TokenBuy',
+      async (_ethIn, _tokenOut, _fee, _buyer, event: ethers.Event) => {
+        await this.processTransactionEvent(
+          token,
+          event,
+          TransactionType.Buy,
+          event.blockNumber,
         );
+      },
+    );
 
-        if (!transactions) {
-          continue;
-        }
+    contract.on(
+      'TokenSell',
+      async (_tokenIn, _ethOut, _fee, _seller, event: ethers.Event) => {
+        await this.processTransactionEvent(
+          token,
+          event,
+          TransactionType.Sell,
+          event.blockNumber,
+        );
+      },
+    );
+  }
 
-        for (const transaction of transactions) {
-          const existingTransaction =
-            await this.launchboxTokenTransactionRepository.findOne({
-              where: {
-                transaction_hash: transaction.transactionHash,
-                token_id: token.id,
-              },
-            });
+  private getContract(contractAddress: string, abi: string[]): ethers.Contract {
+    const provider = this.contractService.getProvider();
+    return new ethers.Contract(contractAddress, abi, provider);
+  }
 
-          if (existingTransaction) {
-            continue;
-          }
+  private async processTransferEvent(
+    token: LaunchboxToken,
+    event: ethers.Event,
+  ): Promise<void> {
+    const { from, to, value } = event.args as unknown as {
+      from: string;
+      to: string;
+      value: ethers.BigNumber;
+    };
 
-          const ethValue = ethers.utils.formatEther(transaction.ethValue);
-          const tokenValue = ethers.utils.formatUnits(
-            transaction.tokenValue,
-            token.token_decimals,
-          );
+    await this.updateHolderBalance(token, to, value, true, event.blockNumber);
 
-          let feeValue: string = '0';
+    await this.updateHolderBalance(
+      token,
+      from,
+      value,
+      false,
+      event.blockNumber,
+    );
+  }
 
-          if (transaction.type === TransactionType.Buy) {
-            feeValue = ethers.utils.formatEther(transaction.fee);
-          } else {
-            feeValue = ethers.utils.formatUnits(
-              transaction.fee,
-              token.token_decimals,
-            );
-          }
+  private async updateHolderBalance(
+    token: LaunchboxToken,
+    address: string,
+    value: ethers.BigNumber,
+    isReceiver: boolean,
+    blockNumber: number,
+  ): Promise<void> {
+    const holder = await this.launchboxTokenHolderRepository.findOne({
+      where: { address, token_id: token.id },
+    });
 
-          const newTransaction =
-            this.launchboxTokenTransactionRepository.create({
-              id: uuidv4(),
-              address: transaction.address,
-              token_value: tokenValue.toString(),
-              eth_value: ethValue.toString(),
-              fee: feeValue.toString(),
-              type: transaction.type,
-              transaction_hash: transaction.transactionHash,
-              block_number: transaction.blockNumber,
-              token_id: token.id,
-            });
-
-          await this.launchboxTokenTransactionRepository.save(newTransaction);
-        }
-      }
-
-      return successResponse({
-        status: true,
-        message: 'Tokens transactions seeded successfully',
-      });
-    } catch (error) {
-      this.logger.error(
-        'An error occurred while seeding the token transactions.',
-        error,
+    if (holder) {
+      const formattedBalanceValue = ethers.utils.parseUnits(
+        holder.balance,
+        token.token_decimals,
       );
 
-      if (error instanceof ServiceError) {
-        return error.toErrorResponse();
-      }
+      const updatedBalance = isReceiver
+        ? ethers.BigNumber.from(formattedBalanceValue.toString()).add(value)
+        : ethers.BigNumber.from(formattedBalanceValue.toString()).sub(value);
 
-      throw new ServiceError(
-        'An error occurred while seeding the token transactions. Please try again later.',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      ).toErrorResponse();
+      const formattedBalance = ethers.utils.formatUnits(
+        updatedBalance,
+        token.token_decimals,
+      );
+
+      await this.launchboxTokenHolderRepository.updateOne(
+        { address, token_id: token.id },
+        { $set: { balance: formattedBalance.toString() } },
+      );
+    } else if (isReceiver) {
+      const formattedValue = ethers.utils.formatUnits(
+        value.toString(),
+        token.token_decimals,
+      );
+
+      const newHolder = this.launchboxTokenHolderRepository.create({
+        id: uuidv4(),
+        balance: formattedValue.toString(),
+        address,
+        token_id: token.id,
+        block_number: blockNumber,
+      });
+
+      await this.launchboxTokenHolderRepository.save(newHolder);
     }
+  }
+
+  private async processTransactionEvent(
+    token: LaunchboxToken,
+    event: ethers.Event,
+    type: TransactionType,
+    blockNumber: number,
+  ): Promise<void> {
+    let ethValue, tokenValue, fee, address;
+
+    const transactionExists =
+      await this.launchboxTokenTransactionRepository.findOne({
+        where: {
+          transaction_hash: event.transactionHash,
+          chain: {
+            id: token.chain.id,
+          },
+        },
+      });
+
+    if (transactionExists) {
+      return;
+    }
+
+    if (type === TransactionType.Buy) {
+      const args = event.args as unknown as {
+        ethIn: string;
+        tokenOut: string;
+        fee: string;
+        buyer: string;
+      };
+
+      ethValue = ethers.utils.formatEther(args.ethIn);
+      tokenValue = ethers.utils.formatUnits(
+        args.tokenOut,
+        token.token_decimals,
+      );
+      fee = ethers.utils.formatEther(args.fee);
+      address = args.buyer;
+    } else {
+      const args = event.args as unknown as {
+        tokenIn: string;
+        ethOut: string;
+        fee: string;
+        seller: string;
+      };
+
+      tokenValue = ethers.utils.formatUnits(args.tokenIn, token.token_decimals);
+      ethValue = ethers.utils.formatEther(args.ethOut);
+      fee = ethers.utils.formatUnits(args.fee, token.token_decimals);
+      address = args.seller;
+    }
+
+    const newTransaction = this.launchboxTokenTransactionRepository.create({
+      id: uuidv4(),
+      eth_value: ethValue,
+      token_value: tokenValue,
+      fee,
+      address,
+      type,
+      token_id: token.id,
+      block_number: blockNumber,
+      transaction_hash: event.transactionHash,
+      chain: {
+        id: token.chain.id,
+        name: token.chain.name,
+      },
+    });
+
+    await this.launchboxTokenTransactionRepository.save(newTransaction);
   }
 
   private validateBodyChain(chain: Chain) {
@@ -771,8 +918,10 @@ export class LaunchboxService {
 
   private async getMoreTransactionData(
     tokenId: string,
+    tokenAddress: string,
     exchangeAddress: string,
-    ethPriceUSD: number = 0,
+    ethPriceUSD: number,
+    tokenDecimals: number,
   ) {
     const pipeline = [
       {
@@ -819,10 +968,21 @@ export class LaunchboxService {
     const volume = volumeEth * ethPriceUSD;
     const price = parseFloat(priceEth) * ethPriceUSD;
 
+    const { tokenLiquidity, tokenEthLiquidity } =
+      await this.contractService.getTokenLiquidity(
+        tokenAddress,
+        exchangeAddress,
+        tokenDecimals,
+      );
+    const tokenLiquidityUsd = parseFloat(tokenLiquidity) * price;
+    const tokenEthLiquidityUsd = parseFloat(tokenEthLiquidity) * ethPriceUSD;
+    const liquidity = tokenLiquidityUsd + tokenEthLiquidityUsd;
+
     return {
       totalSellCount,
       totalBuyCount,
       volume: volume,
+      liquidity,
       price,
       marketCap: parseFloat(marketCapUsd),
     };

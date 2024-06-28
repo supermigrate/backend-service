@@ -138,6 +138,12 @@ export class LaunchboxTokenTransaction {
   @Column()
   token_id: string;
 
+  @Column()
+  chain: {
+    id: number;
+    name: string;
+  };
+
   @CreateDateColumn()
   created_at: Date;
 

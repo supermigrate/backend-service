@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { LaunchboxService } from './launchbox.service';
@@ -30,4 +30,10 @@ import { SharedModule } from '../../common/helpers/shared/shared.module';
   controllers: [LaunchboxController],
   exports: [LaunchboxService],
 })
-export class LaunchboxModule {}
+export class LaunchboxModule implements OnApplicationBootstrap {
+  constructor(private readonly launchboxService: LaunchboxService) {}
+
+  async onApplicationBootstrap() {
+    await this.launchboxService.init();
+  }
+}

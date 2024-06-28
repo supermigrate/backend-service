@@ -213,14 +213,4 @@ export class LaunchboxController {
   async getPrice() {
     return this.launchboxService.getCoinPrice();
   }
-
-  @Get('tokens/holders/seed')
-  async seedHolders() {
-    return this.launchboxService.seedTokenHolders();
-  }
-
-  @Get('tokens/transactions/seed')
-  async seedTransactions() {
-    return this.launchboxService.seedTokenTransactions();
-  }
 }

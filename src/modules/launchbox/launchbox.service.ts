@@ -280,10 +280,7 @@ export class LaunchboxService {
         },
       });
     } catch (error) {
-      this.logger.error(
-        'An error occurred while fetching the tokens.',
-        error.stack,
-      );
+      console.log('An error occurred while fetching the tokens.', error);
 
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
@@ -923,68 +920,77 @@ export class LaunchboxService {
     ethPriceUSD: number,
     tokenDecimals: number,
   ) {
-    const pipeline = [
-      {
-        $match: {
-          token_id: tokenId,
+    try {
+      const pipeline = [
+        {
+          $match: {
+            token_id: tokenId,
+          },
         },
-      },
-      {
-        $group: {
-          _id: null,
-          total: {
-            $sum: {
-              $toDouble: '$eth_value',
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: {
+                $toDouble: '$eth_value',
+              },
             },
           },
         },
-      },
-    ];
+      ];
 
-    const [
-      totalSellCount,
-      totalBuyCount,
-      resultVolume,
-      { priceEth, marketCapUsd },
-    ] = await Promise.all([
-      this.launchboxTokenTransactionRepository.count({
-        token_id: tokenId,
-        type: 'sell',
-      }),
-      this.launchboxTokenTransactionRepository.count({
-        token_id: tokenId,
-        type: 'buy',
-      }),
-      this.launchboxTokenTransactionRepository.aggregate(pipeline).toArray(),
-      this.contractService.getTokenPriceAndMarketCap(exchangeAddress),
-    ]);
+      const [
+        totalSellCount,
+        totalBuyCount,
+        resultVolume,
+        { priceEth, marketCapUsd },
+      ] = await Promise.all([
+        this.launchboxTokenTransactionRepository.count({
+          token_id: tokenId,
+          type: 'sell',
+        }),
+        this.launchboxTokenTransactionRepository.count({
+          token_id: tokenId,
+          type: 'buy',
+        }),
+        this.launchboxTokenTransactionRepository.aggregate(pipeline).toArray(),
+        this.contractService.getTokenPriceAndMarketCap(exchangeAddress),
+      ]);
 
-    const volumeEth = (
-      resultVolume[0] as unknown as {
-        total: number;
-      }
-    ).total;
+      const volumeEth = (
+        resultVolume[0] as unknown as {
+          total: number;
+        }
+      ).total;
 
-    const volume = volumeEth * ethPriceUSD;
-    const price = parseFloat(priceEth) * ethPriceUSD;
+      const volume = volumeEth * ethPriceUSD;
+      const price = parseFloat(priceEth) * ethPriceUSD;
 
-    const { tokenLiquidity, tokenEthLiquidity } =
-      await this.contractService.getTokenLiquidity(
-        tokenAddress,
-        exchangeAddress,
-        tokenDecimals,
+      const { tokenLiquidity, tokenEthLiquidity } =
+        await this.contractService.getTokenLiquidity(
+          tokenAddress,
+          exchangeAddress,
+          tokenDecimals,
+        );
+      const tokenLiquidityUsd = parseFloat(tokenLiquidity) * price;
+      const tokenEthLiquidityUsd = parseFloat(tokenEthLiquidity) * ethPriceUSD;
+      const liquidity = tokenLiquidityUsd + tokenEthLiquidityUsd;
+
+      return {
+        totalSellCount,
+        totalBuyCount,
+        volume: volume,
+        liquidity,
+        price,
+        marketCap: parseFloat(marketCapUsd),
+      };
+    } catch (error) {
+      console.log('getMoreTransactionData', error);
+
+      throw new ServiceError(
+        'Error fetching datat',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
-    const tokenLiquidityUsd = parseFloat(tokenLiquidity) * price;
-    const tokenEthLiquidityUsd = parseFloat(tokenEthLiquidity) * ethPriceUSD;
-    const liquidity = tokenLiquidityUsd + tokenEthLiquidityUsd;
-
-    return {
-      totalSellCount,
-      totalBuyCount,
-      volume: volume,
-      liquidity,
-      price,
-      marketCap: parseFloat(marketCapUsd),
-    };
+    }
   }
 }

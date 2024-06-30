@@ -957,6 +957,20 @@ export class LaunchboxService {
         this.contractService.getTokenPriceAndMarketCap(exchangeAddress),
       ]);
 
+      console.log(
+        'totalSellCount',
+        totalSellCount,
+        'totalBuyCount',
+        totalBuyCount,
+        'resultVolume',
+        resultVolume,
+        'priceEth & marketCapUsd',
+        {
+          priceEth,
+          marketCapUsd,
+        },
+      );
+
       const volumeEth = (
         resultVolume[0] as unknown as {
           total: number;
@@ -988,7 +1002,7 @@ export class LaunchboxService {
       console.log('getMoreTransactionData', error);
 
       throw new ServiceError(
-        'Error fetching datat',
+        'Error fetching data',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

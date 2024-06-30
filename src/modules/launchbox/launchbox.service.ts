@@ -280,7 +280,10 @@ export class LaunchboxService {
         },
       });
     } catch (error) {
-      console.log('An error occurred while fetching the tokens.', error);
+      this.logger.error(
+        'An error occurred while fetching the tokens.',
+        error.stack,
+      );
 
       if (error instanceof ServiceError) {
         return error.toErrorResponse();
@@ -957,27 +960,9 @@ export class LaunchboxService {
         this.contractService.getTokenPriceAndMarketCap(exchangeAddress),
       ]);
 
-      console.log(
-        'totalSellCount',
-        totalSellCount,
-        'totalBuyCount',
-        totalBuyCount,
-        'resultVolume',
-        resultVolume,
-        'priceEth & marketCapUsd',
-        {
-          priceEth,
-          marketCapUsd,
-        },
-      );
+      const volumeEth = resultVolume[0] as { total?: number };
+      const volume = (volumeEth?.total ?? 0) * ethPriceUSD;
 
-      const volumeEth = (
-        resultVolume[0] as unknown as {
-          total: number;
-        }
-      ).total;
-
-      const volume = volumeEth * ethPriceUSD;
       const price = parseFloat(priceEth) * ethPriceUSD;
 
       const { tokenLiquidity, tokenEthLiquidity } =
@@ -999,7 +984,7 @@ export class LaunchboxService {
         marketCap: parseFloat(marketCapUsd),
       };
     } catch (error) {
-      console.log('getMoreTransactionData', error);
+      this.logger.error('getMoreTransactionData', error.stack);
 
       throw new ServiceError(
         'Error fetching data',

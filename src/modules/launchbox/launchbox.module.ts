@@ -1,6 +1,5 @@
 import { Module, OnApplicationBootstrap } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { HttpModule } from '@nestjs/axios';
 import { LaunchboxService } from './launchbox.service';
 import { LaunchboxController } from './launchbox.controller';
 import {
@@ -12,6 +11,8 @@ import { CloudinaryModule } from '../../common/helpers/cloudinary/cloudinary.mod
 import { FarcasterModule } from '../../common/helpers/farcaster/farcaster.module';
 import { ContractModule } from '../../common/helpers/contract/contract.module';
 import { SharedModule } from '../../common/helpers/shared/shared.module';
+import { AnalyticModule } from 'src/common/helpers/analytic/analytic.module';
+import { env } from '../../common/config/env';
 
 @Module({
   imports: [
@@ -22,9 +23,9 @@ import { SharedModule } from '../../common/helpers/shared/shared.module';
     ]),
     CloudinaryModule,
     FarcasterModule,
-    HttpModule,
     ContractModule,
     SharedModule,
+    AnalyticModule,
   ],
   providers: [LaunchboxService],
   controllers: [LaunchboxController],
@@ -34,6 +35,8 @@ export class LaunchboxModule implements OnApplicationBootstrap {
   constructor(private readonly launchboxService: LaunchboxService) {}
 
   async onApplicationBootstrap() {
-    await this.launchboxService.init();
+    if (env.isProduction) {
+      await this.launchboxService.init();
+    }
   }
 }

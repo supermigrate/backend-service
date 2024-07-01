@@ -153,6 +153,29 @@ export class LaunchboxController {
 
   @ApiResponse({
     status: HttpStatus.OK,
+    description: 'Token channel analytics fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token channel analytics. Please try again later.',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
+  @Get('/tokens/:reference/channel-analytics')
+  async getChannelAnalytics(
+    @Param('reference') reference: string,
+    @Query() query: PriceAnalyticQueryDto,
+  ) {
+    return this.launchboxService.getChannelAnalytics(reference, query.period);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
     description: 'Token holders fetched successfully',
   })
   @ApiResponse({
@@ -210,8 +233,8 @@ export class LaunchboxController {
     type: ErrorResponse,
   })
   @Get('/tokens/:id/casts')
-  async getTokenCasts(@Param('id') id: string) {
-    return this.launchboxService.getTokenCasts(id);
+  async getTokenCasts(@Param('id') id: string, @Query() query: PaginateDto) {
+    return this.launchboxService.getTokenCasts(id, parseInt(query.take));
   }
 
   @ApiResponse({
@@ -224,8 +247,14 @@ export class LaunchboxController {
     type: ErrorResponse,
   })
   @Get('/channels/:address')
-  async getChannelsByAddress(@Param('address') address: string) {
-    return this.launchboxService.getChannelsByAddress(address);
+  async getChannelsByAddress(
+    @Param('address') address: string,
+    @Query() query: PaginateDto,
+  ) {
+    return this.launchboxService.getChannelsByAddress(
+      address,
+      parseInt(query.take),
+    );
   }
 
   @ApiResponse({

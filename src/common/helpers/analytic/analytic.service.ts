@@ -1,17 +1,16 @@
 import { ethers, utils } from 'ethers';
 import * as EthDater from 'ethereum-block-by-date';
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   CacheEntry,
-  DateRange,
   PeriodKey,
   PeriodType,
   PriceAnalytics,
   PriceDataPoint,
 } from './interfaces/analytic.interface';
 import { ContractService } from '../contract/contract.service';
-import { ServiceError } from 'src/common/errors/service.error';
 import { Period } from './enums/analytic.enum';
+import { getDateRangeFromKey, getPeriod } from '../../utils';
 
 @Injectable()
 export class AnalyticService {
@@ -166,43 +165,10 @@ export class AnalyticService {
     contractAddress: string,
     periodKey: PeriodKey,
   ): Promise<PriceAnalytics> {
-    const { startDate, endDate } = this.getDateRangeFromKey(periodKey);
+    const { startDate, endDate } = getDateRangeFromKey(periodKey);
 
-    const periodMap: { [K in PeriodKey]: Period } = {
-      '1h': Period.Minute,
-      '24h': Period.Hour,
-      '1w': Period.Day,
-      '1m': Period.Week,
-    };
-    const period = periodMap[periodKey];
+    const period = getPeriod(periodKey);
 
     return this.getPriceAnalytics(contractAddress, period, startDate, endDate);
-  }
-
-  getDateRangeFromKey(key: PeriodKey): DateRange {
-    const now = new Date();
-    let startDate: Date;
-
-    switch (key) {
-      case '1h':
-        startDate = new Date(now.getTime() - 60 * 60 * 1000); // 1 hour ago
-        break;
-      case '24h':
-        startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000); // 24 hours ago
-        break;
-      case '1w':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
-        break;
-      case '1m':
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // Approximately 1 month ago
-        break;
-      default:
-        throw new ServiceError('Invalid period', HttpStatus.BAD_REQUEST);
-    }
-
-    return {
-      startDate,
-      endDate: now,
-    };
   }
 }

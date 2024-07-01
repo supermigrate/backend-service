@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { PeriodKey } from '../../../common/helpers/analytic/interfaces/analytic.interface';
 
 export class SocialDto {
   @IsNotEmpty()
@@ -150,4 +151,10 @@ export class PaginateDto {
   @IsString()
   @Transform(({ value }) => value.trim())
   search: string;
+}
+
+export class PriceAnalyticQueryDto {
+  @IsNotEmpty()
+  @IsString()
+  period: PeriodKey;
 }

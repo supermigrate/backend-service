@@ -29,6 +29,7 @@ import { Currency, TransactionType } from './enums/launchbox.enum';
 import { SharedService } from '../../common/helpers/shared/shared.service';
 import { AnalyticService } from '../../common/helpers/analytic/analytic.service';
 import { PeriodKey } from '../../common/helpers/analytic/interfaces/analytic.interface';
+import { getDateRangeFromKey } from '../../common/utils';
 
 @Injectable()
 export class LaunchboxService {
@@ -359,7 +360,7 @@ export class LaunchboxService {
         throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
       }
 
-      this.analyticService.getDateRangeFromKey(period);
+      getDateRangeFromKey(period);
 
       const analytics = await this.analyticService.getPriceAnalyticsByKey(
         launchboxToken.exchange_address,
@@ -383,6 +384,53 @@ export class LaunchboxService {
 
       throw new ServiceError(
         'An error occurred while fetching the token price analytics. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getChannelAnalytics(
+    reference: string,
+    period: PeriodKey,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const isUuid = validator.isUUID(reference);
+      const launchboxToken = await this.launchboxTokenRepository.findOne({
+        where: isUuid ? { id: reference } : { token_address: reference },
+      });
+
+      if (!launchboxToken) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      } else if (!launchboxToken.socials?.warpcast?.channel?.url) {
+        throw new ServiceError(
+          'Token does not have a connected channel',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      getDateRangeFromKey(period);
+
+      const analytics = await this.farcasterService.getChannelAnalyticsByKey(
+        launchboxToken.socials?.warpcast?.channel?.name,
+        period,
+      );
+
+      return successResponse({
+        status: true,
+        message: 'Token channel analytics fetched successfully',
+        data: analytics,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token channel analytics. Please try again later.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token channel analytics. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
     }
@@ -463,7 +511,10 @@ export class LaunchboxService {
     }
   }
 
-  async getTokenCasts(id: string): Promise<IResponse | ServiceError> {
+  async getTokenCasts(
+    id: string,
+    limit: number,
+  ): Promise<IResponse | ServiceError> {
     try {
       const token = await this.launchboxTokenRepository.findOne({
         where: { id },
@@ -479,18 +530,28 @@ export class LaunchboxService {
       }
 
       const casts = await this.farcasterService.getChannelCasts(
-        token.socials.warpcast.channel.url,
+        token.socials.warpcast.channel.name,
+        limit,
       );
-      let weeklyCasts = 0;
+
+      let weeklyRecord: {
+        castsCount: number;
+        percentageChange: number;
+        isIncreased: boolean;
+      } = {
+        castsCount: 0,
+        percentageChange: 0,
+        isIncreased: false,
+      };
+
       let socialCapital = 0;
 
       if (token.socials?.warpcast?.channel?.url) {
-        weeklyCasts = await this.farcasterService.getNumberOfWeeklyCasts(
-          token.socials.warpcast.channel.url,
+        weeklyRecord = await this.farcasterService.getNumberOfWeeklyCasts(
+          token.socials.warpcast.channel.name,
         );
         socialCapital = await this.farcasterService.getSocialCapitalNumber(
           token.socials.warpcast.channel.name,
-          token.chain.name,
           token.token_address,
         );
       }
@@ -500,7 +561,9 @@ export class LaunchboxService {
         message: 'Token casts fetched successfully',
         data: casts,
         meta: {
-          weekly_casts: weeklyCasts,
+          weekly_casts: weeklyRecord.castsCount,
+          weekly_casts_percentage_change: weeklyRecord.percentageChange,
+          weekly_casts_increased: weeklyRecord.isIncreased,
           social_capital: socialCapital,
         },
       });
@@ -579,10 +642,13 @@ export class LaunchboxService {
 
   async getChannelsByAddress(
     address: string,
+    limit: number,
   ): Promise<IResponse | ServiceError> {
     try {
-      const channels =
-        await this.farcasterService.getChannelsByAddress(address);
+      const channels = await this.farcasterService.getChannelsByAddress(
+        address,
+        limit,
+      );
 
       const formattedChannels = channels.map((channel) => {
         return {

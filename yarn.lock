@@ -59,9 +59,9 @@
     rxjs "7.8.1"
 
 "@apollo/client@^3.10.5":
-  version "3.10.5"
-  resolved "https://registry.yarnpkg.com/@apollo/client/-/client-3.10.5.tgz#7bc5d43b54b3d66b4fffdab6ad3cb207808041db"
-  integrity sha512-bZh5wLAT8b4KdEmqnqiQeDUttnR+NJ+gDYSN8T+U0uFGN++5LO5PTwySih6kIU5ErGGGw4NHI94YdSET3uLuBA==
+  version "3.10.8"
+  resolved "https://registry.yarnpkg.com/@apollo/client/-/client-3.10.8.tgz#96b1548818e45fac752ec2bd318e5466d9ca26b5"
+  integrity sha512-UaaFEitRrPRWV836wY2L7bd3HRCfbMie1jlYMcmazFAK23MVhz/Uq7VG1nwbotPb5xzFsw5RF4Wnp2G3dWPM3g==
   dependencies:
     "@graphql-typed-document-node/core" "^3.1.1"
     "@wry/caches" "^1.0.0"
@@ -2879,10 +2879,10 @@ chalk@^5.3.0:
   resolved "https://registry.yarnpkg.com/chalk/-/chalk-5.3.0.tgz#67c20a7ebef70e7f3970a01f90fa210cb6860385"
   integrity sha512-dLitG79d+GV1Nb/VYcCDFivJeK1hiukt9QjRNVOsUtTy1rR1YJsmpGGTZ3qJos+uw7WmWF4wUwBd9jxjocFC2w==
 
-channels-lib@1.0.2:
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/channels-lib/-/channels-lib-1.0.2.tgz#d35b9634864c3c2014d313b38705299d68633d27"
-  integrity sha512-u+pbKPRo5FdediWjMrlaAcDUksNoqORDUPdngKi2J1RS+5m7ZxPFpEX8H1PGUyG5xhU8vOUweLI0mKQdLSEBqA==
+channels-lib@^2.0.3:
+  version "2.0.3"
+  resolved "https://registry.yarnpkg.com/channels-lib/-/channels-lib-2.0.3.tgz#43231680a114cc7b85444353dbe7b30f5252a85c"
+  integrity sha512-ZU5g0C7cevxOIcYX49yiaiikMhbyGc++VCuxnmWhN/pG5tB8nu3fiKLq53QplZTb13XLzhiUI3Tl+ayF5NsuYA==
   dependencies:
     "@airstack/node" "^0.0.7"
     "@apollo/client" "^3.10.5"
@@ -4507,9 +4507,9 @@ graphql@16.7.1:
   integrity sha512-DRYR9tf+UGU0KOsMcKAlXeFfX89UiiIZ0dRU3mR0yJfu6OjZqUcp68NnFLnqQU5RexygFoDy1EW+ccOYcPfmHg==
 
 graphql@^16.8.2:
-  version "16.8.2"
-  resolved "https://registry.yarnpkg.com/graphql/-/graphql-16.8.2.tgz#54771c7ff195da913f5e70af8044a026d32eca2a"
-  integrity sha512-cvVIBILwuoSyD54U4cF/UXDh5yAobhNV/tPygI4lZhgOIJQE/WLWC4waBRb4I6bDVYb3OVx3lfHbaQOEoUD5sg==
+  version "16.9.0"
+  resolved "https://registry.yarnpkg.com/graphql/-/graphql-16.9.0.tgz#1c310e63f16a49ce1fbb230bd0a000e99f6f115f"
+  integrity sha512-GGTKBX4SD7Wdb8mqeDLni2oaRGYQWjWHGKPQ24ZMnUtKfcsVoiv4uX8+LJr1K6U5VW2Lu1BwJnj7uiori0YtRw==
 
 har-schema@^2.0.0:
   version "2.0.0"

@@ -17,7 +17,12 @@ import { LaunchboxService } from './launchbox.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CustomUploadFileTypeValidator } from '../../common/validators/file.validator';
 import { env } from '../../common/config/env';
-import { CreateDto, PaginateDto, UpdateDto } from './dtos/launchbox.dto';
+import {
+  CreateDto,
+  PaginateDto,
+  PriceAnalyticQueryDto,
+  UpdateDto,
+} from './dtos/launchbox.dto';
 import { FileMimes } from '../../common/enums/index.enum';
 import { ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/responses';
@@ -121,6 +126,29 @@ export class LaunchboxController {
   @Get('/tokens/:reference')
   async findOne(@Param('reference') reference: string) {
     return this.launchboxService.findOne(reference);
+  }
+
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Token price analytics fetched successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.INTERNAL_SERVER_ERROR,
+    description:
+      'An error occurred while fetching the token price analytics. Please try again later.',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token not found',
+    type: ErrorResponse,
+  })
+  @Get('/tokens/:reference/price-analytics')
+  async getPriceAnalytics(
+    @Param('reference') reference: string,
+    @Query() query: PriceAnalyticQueryDto,
+  ) {
+    return this.launchboxService.getPriceAnalytics(reference, query.period);
   }
 
   @ApiResponse({

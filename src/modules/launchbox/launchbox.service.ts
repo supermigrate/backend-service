@@ -1,5 +1,4 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { v4 as uuidv4 } from 'uuid';
@@ -28,6 +27,8 @@ import { FarcasterService } from '../../common/helpers/farcaster/farcaster.servi
 import { ContractService } from '../../common/helpers/contract/contract.service';
 import { Currency, TransactionType } from './enums/launchbox.enum';
 import { SharedService } from '../../common/helpers/shared/shared.service';
+import { AnalyticService } from '../../common/helpers/analytic/analytic.service';
+import { PeriodKey } from '../../common/helpers/analytic/interfaces/analytic.interface';
 
 @Injectable()
 export class LaunchboxService {
@@ -40,9 +41,9 @@ export class LaunchboxService {
     private readonly launchboxTokenTransactionRepository: MongoRepository<LaunchboxTokenTransaction>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly farcasterService: FarcasterService,
-    private readonly httpService: HttpService,
     private readonly contractService: ContractService,
     private readonly sharedService: SharedService,
+    private readonly analyticService: AnalyticService,
   ) {}
 
   private logger = new Logger(LaunchboxService.name);
@@ -339,6 +340,49 @@ export class LaunchboxService {
 
       throw new ServiceError(
         'An error occurred while fetching the token. Please try again later.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      ).toErrorResponse();
+    }
+  }
+
+  async getPriceAnalytics(
+    reference: string,
+    period: PeriodKey,
+  ): Promise<IResponse | ServiceError> {
+    try {
+      const isUuid = validator.isUUID(reference);
+      const launchboxToken = await this.launchboxTokenRepository.findOne({
+        where: isUuid ? { id: reference } : { token_address: reference },
+      });
+
+      if (!launchboxToken) {
+        throw new ServiceError('Token not found', HttpStatus.NOT_FOUND);
+      }
+
+      this.analyticService.getDateRangeFromKey(period);
+
+      const analytics = await this.analyticService.getPriceAnalyticsByKey(
+        launchboxToken.exchange_address,
+        period,
+      );
+
+      return successResponse({
+        status: true,
+        message: 'Token price analytics fetched successfully',
+        data: analytics,
+      });
+    } catch (error) {
+      this.logger.error(
+        'An error occurred while fetching the token price analytics. Please try again later.',
+        error.stack,
+      );
+
+      if (error instanceof ServiceError) {
+        return error.toErrorResponse();
+      }
+
+      throw new ServiceError(
+        'An error occurred while fetching the token price analytics. Please try again later.',
         HttpStatus.INTERNAL_SERVER_ERROR,
       ).toErrorResponse();
     }

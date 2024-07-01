@@ -22,6 +22,7 @@ import { ContractModule } from './common/helpers/contract/contract.module';
 import { LaunchboxModule } from './modules/launchbox/launchbox.module';
 import { FarcasterModule } from './common/helpers/farcaster/farcaster.module';
 import { SharedModule } from './common/helpers/shared/shared.module';
+import { AnalyticModule } from './common/helpers/analytic/analytic.module';
 import ormConfig from 'ormconfig';
 
 const envPath = getEnvPath();
@@ -52,6 +53,7 @@ const envPath = getEnvPath();
     LaunchboxModule,
     FarcasterModule,
     SharedModule,
+    AnalyticModule,
   ],
   controllers: [AppController],
   providers: [
